@@ -9,6 +9,7 @@ import Reports from './pages/Reports';
 import ReportDetail from './pages/ReportDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminSettings from './pages/AdminSettings';
+import AdminActivityLog from './pages/AdminActivityLog';
 
 function App() {
   return (
@@ -57,6 +58,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AdminSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/activity-log"
+            element={
+              <ProtectedRoute>
+                <AdminActivityLog />
               </ProtectedRoute>
             }
           />

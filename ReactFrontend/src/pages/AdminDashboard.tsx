@@ -121,16 +121,16 @@ export default function AdminDashboard() {
               <h3 className="font-semibold text-slate-900 mb-3">Quick Actions</h3>
               <div className="space-y-2">
                 <a
-                  href="/admin/settings"
+                  href="/admin/activity-log"
                   className="block px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition text-center"
                 >
-                  Manage Rules
+                  View Activity Log
                 </a>
                 <a
                   href="/admin/settings"
                   className="block px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition text-center"
                 >
-                  Settings
+                  Manage Rules & Settings
                 </a>
               </div>
             </div>

@@ -88,6 +88,9 @@ export default function Navigation() {
                 <a href="/admin/dashboard" className="text-slate-600 hover:text-teal-600 font-medium">
                   Dashboard
                 </a>
+                <a href="/admin/activity-log" className="text-slate-600 hover:text-teal-600 font-medium">
+                  Activity Log
+                </a>
                 <a href="/admin/settings" className="text-slate-600 hover:text-teal-600 font-medium">
                   Settings
                 </a>
@@ -150,6 +153,12 @@ export default function Navigation() {
                   className="block px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
                 >
                   Dashboard
+                </a>
+                <a
+                  href="/admin/activity-log"
+                  className="block px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                >
+                  Activity Log
                 </a>
                 <a
                   href="/admin/settings"

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { logActivity } from '../lib/activityLog';
 
 type UserRole = 'analyst' | 'admin';
 
@@ -70,10 +71,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return Promise.resolve({ data: null, error: null });
     }
 
-    return await supabase.auth.signUp({
+    const result = await supabase.auth.signUp({
       email,
       password,
     });
+
+    await logActivity({
+      category: 'auth',
+      action: 'signup',
+      status: result.error ? 'failure' : 'success',
+      description: result.error?.message,
+      email,
+    });
+
+    return result;
   };
 
   const signIn = async (email: string, password: string) => {
@@ -81,10 +92,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return Promise.resolve({ data: null, error: null });
     }
 
-    return await supabase.auth.signInWithPassword({
+    const result = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
+    await logActivity({
+      category: 'auth',
+      action: 'login',
+      status: result.error ? 'failure' : 'success',
+      description: result.error?.message,
+      email,
+    });
+
+    return result;
   };
 
   const signOut = async () => {
@@ -95,7 +116,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+
+    await logActivity({
+      category: 'auth',
+      action: 'logout',
+      status: error ? 'failure' : 'success',
+      description: error?.message,
+      email: user?.email,
+    });
   };
 
   const resetPassword = async (email: string) => {
@@ -103,7 +132,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return Promise.resolve({ data: null, error: null });
     }
 
-    return await supabase.auth.resetPasswordForEmail(email);
+    const result = await supabase.auth.resetPasswordForEmail(email);
+
+    await logActivity({
+      category: 'auth',
+      action: 'reset_password',
+      status: result.error ? 'failure' : 'success',
+      description: result.error?.message,
+      email,
+    });
+
+    return result;
   };
 
   const value: AuthContextType = {
