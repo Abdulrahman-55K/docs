@@ -1,0 +1,45 @@
+# ============================================================
+# Malicious Document Detector — Python Dependencies
+# Install:  pip install -r requirements.txt
+# ============================================================
+
+# --- Django core ---
+Django>=5.1,<5.2
+djangorestframework>=3.15,<4.0
+django-cors-headers>=4.4,<5.0
+djangorestframework-simplejwt>=5.3,<6.0
+
+# --- Async task queue ---
+celery>=5.4,<6.0
+redis>=5.0,<6.0
+
+# --- File validation ---
+python-magic>=0.4.27,<1.0
+
+# --- Document parsing (Steps 5+) ---
+PyPDF2>=3.0,<4.0
+python-docx>=1.1,<2.0
+openpyxl>=3.1,<4.0
+python-pptx>=0.6,<1.0
+lxml>=5.0,<6.0
+
+# --- XMP metadata extraction ---
+# (lxml covers XMP parsing from PDF/OOXML)
+
+# --- YARA scanning (Step 6) ---
+yara-python>=4.5,<5.0
+
+# --- VirusTotal API (Step 6) ---
+requests>=2.31,<3.0
+
+# --- ML model loading (Step 7) ---
+scikit-learn>=1.5,<2.0
+joblib>=1.4,<2.0
+xgboost>=2.0,<3.0
+
+# --- Report export (Step 8) ---
+reportlab>=4.1,<5.0
+
+# --- Dev / Testing ---
+pytest>=8.0,<9.0
+pytest-django>=4.8,<5.0
