@@ -2,14 +2,26 @@
 Analysis pipeline endpoints.
 
 All routes prefixed with /api/v1/analysis/ (see core/urls.py).
-Endpoints will be built in Steps 4–8.
+
+Endpoint map:
+  POST  upload/              → upload & validate file, start analysis
+  GET   reports/             → list reports (analyst: own, admin: all)
+  GET   reports/<id>/        → single report with full evidence
 """
 
 from django.urls import path
 
+from .views import (
+    FileUploadView,
+    ReportListView,
+    ReportDetailView,
+)
+
 urlpatterns = [
-    # Step 4:  POST  upload/                → upload & validate file
-    # Step 8:  GET   reports/               → list reports (analyst: own, admin: all)
-    # Step 8:  GET   reports/<id>/          → single report detail
-    # Step 8:  GET   reports/<id>/export/   → export PDF or JSON
+    # File upload
+    path("upload/", FileUploadView.as_view(), name="file-upload"),
+
+    # Reports
+    path("reports/", ReportListView.as_view(), name="report-list"),
+    path("reports/<uuid:id>/", ReportDetailView.as_view(), name="report-detail"),
 ]
