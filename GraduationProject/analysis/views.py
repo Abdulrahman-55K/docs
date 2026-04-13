@@ -124,7 +124,21 @@ class FileUploadView(APIView):
         )
 
         # ------- Enqueue analysis job -------
-        task = run_analysis.delay(str(file_record.id))
+        # Try async (Celery) first, fall back to synchronous if unavailable
+        task_id = None
+        try:
+            task = run_analysis.delay(str(file_record.id))
+            task_id = task.id
+        except Exception as e:
+            # Celery/Redis not running — run synchronously
+            logger.info("Celery unavailable, running analysis synchronously: %s", e)
+            try:
+                run_analysis(str(file_record.id))
+            except Exception as sync_error:
+                logger.error("Synchronous analysis failed: %s", sync_error)
+
+        # Reload file to get updated status
+        file_record.refresh_from_db()
 
         # ------- Audit log -------
         log_audit(
@@ -137,24 +151,35 @@ class FileUploadView(APIView):
                 "sha256": sha256,
                 "mime": mime,
                 "size": file_size,
-                "task_id": task.id if task else None,
+                "task_id": task_id,
+                "sync": task_id is None,
             },
         )
+
+        # ------- Build response -------
+        response_data = {
+            "message": "File received. Analysis in progress.",
+            "file_id": str(file_record.id),
+            "status": file_record.status,
+            "sha256": sha256,
+        }
+
+        # If analysis completed synchronously, include the report ID
+        if file_record.status == File.Status.COMPLETED:
+            try:
+                result = file_record.result
+                response_data["message"] = "Analysis complete."
+                response_data["report_id"] = str(result.id)
+                response_data["banner"] = result.banner
+            except Result.DoesNotExist:
+                pass
 
         logger.info(
-            "File queued for analysis: %s (file_id=%s, task_id=%s)",
-            uploaded_file.name, file_record.id, task.id if task else "sync",
+            "File processed: %s (file_id=%s, status=%s)",
+            uploaded_file.name, file_record.id, file_record.status,
         )
 
-        return Response(
-            {
-                "message": "File received. Analysis in progress.",
-                "file_id": str(file_record.id),
-                "status": file_record.status,
-                "sha256": sha256,
-            },
-            status=status.HTTP_202_ACCEPTED,
-        )
+        return Response(response_data, status=status.HTTP_202_ACCEPTED)
 
 
 # ---------------------------------------------------------------------------
@@ -241,3 +266,75 @@ class ReportDetailView(RetrieveAPIView):
             queryset = queryset.filter(file__uploaded_by=user)
 
         return queryset
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/analysis/reports/<id>/export/?format=pdf|json
+# ---------------------------------------------------------------------------
+class ReportExportView(APIView):
+    """
+    Export a report as PDF or JSON download.
+
+    Query params:
+      format=pdf  → downloadable PDF file
+      format=json → downloadable JSON file (default)
+
+    Matches report Section 3.2.1.1.10 "export options to PDF and JSON"
+    """
+
+    permission_classes = [IsAuthenticated, IsAnalystOrAdmin]
+
+    def get(self, request, id):
+        # Get the result with RBAC
+        try:
+            queryset = Result.objects.select_related("file", "cluster")
+            if request.user.role == "analyst":
+                queryset = queryset.filter(file__uploaded_by=request.user)
+            result = queryset.get(id=id)
+        except Result.DoesNotExist:
+            return Response(
+                {"error": "Report not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        export_format = request.query_params.get("format", "json").lower()
+
+        from .services.report_export import export_as_json, export_as_pdf
+        from django.http import HttpResponse
+
+        if export_format == "pdf":
+            pdf_bytes = export_as_pdf(result)
+            if pdf_bytes is None:
+                return Response(
+                    {"error": "PDF export unavailable. reportlab may not be installed."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            filename = f"report_{result.file.sha256[:12]}.pdf"
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+            log_audit(
+                request=request,
+                category="analysis",
+                action="Report exported (PDF)",
+                details={"report_id": str(result.id), "sha256": result.file.sha256},
+            )
+            return response
+
+        else:
+            # JSON export
+            json_data = export_as_json(result)
+            filename = f"report_{result.file.sha256[:12]}.json"
+
+            from django.http import JsonResponse
+            response = JsonResponse(json_data, json_dumps_params={"indent": 2})
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+            log_audit(
+                request=request,
+                category="analysis",
+                action="Report exported (JSON)",
+                details={"report_id": str(result.id), "sha256": result.file.sha256},
+            )
+            return response

@@ -195,27 +195,23 @@ def _score_ml(file_record, features: dict, yara: dict, vt: dict) -> dict:
     """
     Stage 4: ML risk scoring.
 
-    Will be implemented in Step 7.
-    Returns "needs_review" for now since we don't have a model yet.
+    Uses trained ML model if available, otherwise falls back
+    to rule-based scoring using VT, YARA, and structural signals.
     """
-    logger.info("Stage 4 — ML scoring (placeholder) for %s", file_record.id)
-    return {
-        "label": "needs_review",
-        "score": 0.0,
-        "banner": "needs_review",
-        "top_features": [
-            {"feature": "analysis_pending", "detail": "ML model not yet integrated"},
-        ],
-        "scoring_status": "placeholder",
-    }
+    logger.info("Stage 4 — ML scoring for %s", file_record.id)
+
+    from .services.ml_scorer import score_file
+    return score_file(file_record, features, yara, vt)
 
 
 def _assign_cluster(file_record, features: dict, ml_result: dict):
     """
     Stage 5: Campaign clustering by XMP IDs.
 
-    Will be implemented in Step 7.
-    Returns None (no cluster) for now.
+    Groups files sharing XMP identifiers into clusters.
+    Only clusters suspicious/malicious files.
     """
-    logger.info("Stage 5 — Clustering (placeholder) for %s", file_record.id)
-    return None
+    logger.info("Stage 5 — Clustering for %s", file_record.id)
+
+    from .services.clustering import assign_cluster
+    return assign_cluster(file_record, features, ml_result)

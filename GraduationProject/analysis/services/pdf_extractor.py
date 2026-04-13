@@ -67,6 +67,13 @@ def extract_pdf_metadata(file_path: str) -> dict:
         # --- URLs ---
         result["urls"] = _extract_pdf_urls(reader)
 
+        # Sync URL counts into structural (text extraction finds more than raw bytes)
+        if result["urls"]:
+            result["structural"]["has_urls"] = True
+            result["structural"]["url_count"] = max(
+                result["structural"]["url_count"], len(result["urls"])
+            )
+
         logger.info("PDF metadata extracted: %s", Path(file_path).name)
 
     except Exception as e:
