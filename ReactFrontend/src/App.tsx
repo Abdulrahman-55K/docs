@@ -1,15 +1,15 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import ForgotPassword from './pages/ForgotPassword';
-import AnalystDashboard from './pages/AnalystDashboard';
-import Reports from './pages/Reports';
-import ReportDetail from './pages/ReportDetail';
-import AdminDashboard from './pages/AdminDashboard';
-import AdminSettings from './pages/AdminSettings';
-import AdminActivityLog from './pages/AdminActivityLog';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import AnalystDashboard from "./pages/AnalystDashboard";
+import Reports from "./pages/Reports";
+import ReportDetail from "./pages/ReportDetail";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminSettings from "./pages/AdminSettings";
+import AdminActivityLog from "./pages/AdminActivityLog";
 
 function App() {
   return (

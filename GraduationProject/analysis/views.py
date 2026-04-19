@@ -2,15 +2,15 @@
 Analysis pipeline views.
 
 Endpoints:
-  POST /api/v1/analysis/upload/            → upload & validate file
-  GET  /api/v1/analysis/reports/           → list reports (filtered by role)
-  GET  /api/v1/analysis/reports/<id>/      → single report detail
+  POST /api/v1/analysis/upload/               → upload & validate file
+  GET  /api/v1/analysis/reports/              → list reports (filtered by role)
+  GET  /api/v1/analysis/reports/<id>/         → single report detail
+  GET  /api/v1/analysis/reports/<id>/export/  → export as PDF or JSON
 """
 
 import logging
 from pathlib import Path
 
-from django.db import IntegrityError
 from rest_framework import status
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.parsers import MultiPartParser
@@ -18,7 +18,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsAnalystOrAdmin, IsAdmin
+from accounts.permissions import IsAnalystOrAdmin
 from admin_panel.utils import log_audit
 from .models import File, Result
 from .serializers import (
@@ -33,26 +33,8 @@ from .tasks import run_analysis
 logger = logging.getLogger("analysis")
 
 
-# ---------------------------------------------------------------------------
-# POST /api/v1/analysis/upload/
-# ---------------------------------------------------------------------------
 class FileUploadView(APIView):
-    """
-    Upload a document for analysis.
-
-    This is the "Ingest Service" from the data flow diagram:
-      1. Validate (extension + MIME + magic bytes + size)
-      2. Compute SHA-256 hash
-      3. Check for duplicate (same hash = return existing result)
-      4. Save to quarantine storage
-      5. Create File record in database
-      6. Enqueue analysis job (Celery)
-
-    Request: multipart/form-data with a "file" field
-    Response: 202 Accepted with file_id and analysis_id
-
-    Matches report Section 3.2.1.1.4 "Upload & Validate File"
-    """
+    """Upload a document for analysis."""
 
     permission_classes = [IsAuthenticated, IsAnalystOrAdmin]
     parser_classes = [MultiPartParser]
@@ -63,7 +45,6 @@ class FileUploadView(APIView):
 
         uploaded_file = serializer.validated_data["file"]
 
-        # ------- Validation (extension, MIME, magic bytes, size) -------
         validation = validate_uploaded_file(uploaded_file)
 
         if not validation["valid"]:
@@ -85,13 +66,11 @@ class FileUploadView(APIView):
         mime = validation["mime"]
         file_size = validation["size"]
 
-        # ------- Duplicate check (idempotent by SHA-256) -------
         existing = File.objects.filter(
             sha256=sha256, uploaded_by=request.user
         ).first()
 
         if existing and existing.status == File.Status.COMPLETED:
-            # Same file already analyzed — return existing result
             logger.info("Duplicate upload: %s (sha256=%s)", uploaded_file.name, sha256[:12])
             try:
                 result = existing.result
@@ -106,13 +85,11 @@ class FileUploadView(APIView):
                     status=status.HTTP_200_OK,
                 )
             except Result.DoesNotExist:
-                pass  # result was deleted, re-analyze
+                pass
 
-        # ------- Save to quarantine -------
         extension = Path(uploaded_file.name).suffix.lower()
         quarantine_path = save_to_quarantine(uploaded_file, sha256, extension)
 
-        # ------- Create File record -------
         file_record = File.objects.create(
             sha256=sha256,
             original_name=uploaded_file.name,
@@ -123,24 +100,19 @@ class FileUploadView(APIView):
             uploaded_by=request.user,
         )
 
-        # ------- Enqueue analysis job -------
-        # Try async (Celery) first, fall back to synchronous if unavailable
         task_id = None
         try:
             task = run_analysis.delay(str(file_record.id))
             task_id = task.id
         except Exception as e:
-            # Celery/Redis not running — run synchronously
             logger.info("Celery unavailable, running analysis synchronously: %s", e)
             try:
                 run_analysis(str(file_record.id))
             except Exception as sync_error:
                 logger.error("Synchronous analysis failed: %s", sync_error)
 
-        # Reload file to get updated status
         file_record.refresh_from_db()
 
-        # ------- Audit log -------
         log_audit(
             request=request,
             category="upload",
@@ -156,7 +128,6 @@ class FileUploadView(APIView):
             },
         )
 
-        # ------- Build response -------
         response_data = {
             "message": "File received. Analysis in progress.",
             "file_id": str(file_record.id),
@@ -164,7 +135,6 @@ class FileUploadView(APIView):
             "sha256": sha256,
         }
 
-        # If analysis completed synchronously, include the report ID
         if file_record.status == File.Status.COMPLETED:
             try:
                 result = file_record.result
@@ -182,19 +152,8 @@ class FileUploadView(APIView):
         return Response(response_data, status=status.HTTP_202_ACCEPTED)
 
 
-# ---------------------------------------------------------------------------
-# GET /api/v1/analysis/reports/
-# ---------------------------------------------------------------------------
 class ReportListView(ListAPIView):
-    """
-    List analysis reports.
-
-    - Analysts see only their own reports
-    - Admins see all reports
-
-    Supports filtering by: banner, date range, hash, filename
-    Matches report Section 3.2.1.1.10 and Tables 3.7/3.9
-    """
+    """List analysis reports."""
 
     permission_classes = [IsAuthenticated, IsAnalystOrAdmin]
     serializer_class = ReportListSerializer
@@ -203,29 +162,23 @@ class ReportListView(ListAPIView):
         user = self.request.user
         queryset = Result.objects.select_related("file").all()
 
-        # RBAC: analysts see only their own reports
         if user.role == "analyst":
             queryset = queryset.filter(file__uploaded_by=user)
 
-        # --- Filters ---
         params = self.request.query_params
 
-        # Filter by banner/status
         banner = params.get("status")
         if banner and banner in ["clean", "suspicious", "malicious", "needs_review"]:
             queryset = queryset.filter(banner=banner)
 
-        # Filter by SHA-256 hash
         sha256 = params.get("hash")
         if sha256:
             queryset = queryset.filter(file__sha256__icontains=sha256)
 
-        # Filter by filename
         filename = params.get("filename")
         if filename:
             queryset = queryset.filter(file__original_name__icontains=filename)
 
-        # Filter by date range
         date_from = params.get("date_from")
         if date_from:
             queryset = queryset.filter(created_at__date__gte=date_from)
@@ -237,21 +190,8 @@ class ReportListView(ListAPIView):
         return queryset.order_by("-created_at")
 
 
-# ---------------------------------------------------------------------------
-# GET /api/v1/analysis/reports/<id>/
-# ---------------------------------------------------------------------------
 class ReportDetailView(RetrieveAPIView):
-    """
-    Get full report detail with all evidence.
-
-    Returns: file info, YARA matches, VT summary, ML score/label,
-    cluster info, and top contributing features.
-
-    - Analysts can only view their own reports
-    - Admins can view any report
-
-    Matches report Section 3.2.1.1.10 and Table 3.6
-    """
+    """Get full report detail with all evidence."""
 
     permission_classes = [IsAuthenticated, IsAnalystOrAdmin]
     serializer_class = ReportDetailSerializer
@@ -261,80 +201,61 @@ class ReportDetailView(RetrieveAPIView):
         user = self.request.user
         queryset = Result.objects.select_related("file", "cluster").all()
 
-        # RBAC: analysts see only their own
         if user.role == "analyst":
             queryset = queryset.filter(file__uploaded_by=user)
 
         return queryset
 
 
-# ---------------------------------------------------------------------------
-# GET /api/v1/analysis/reports/<id>/export/?format=pdf|json
-# ---------------------------------------------------------------------------
 class ReportExportView(APIView):
-    """
-    Export a report as PDF or JSON download.
-
-    Query params:
-      format=pdf  → downloadable PDF file
-      format=json → downloadable JSON file (default)
-
-    Matches report Section 3.2.1.1.10 "export options to PDF and JSON"
-    """
+    """Export a report as PDF or JSON download."""
 
     permission_classes = [IsAuthenticated, IsAnalystOrAdmin]
 
     def get(self, request, id):
-        # Get the result with RBAC
+        logger.info("Export requested: id=%s, user=%s", id, request.user.email)
+
         try:
             queryset = Result.objects.select_related("file", "cluster")
             if request.user.role == "analyst":
                 queryset = queryset.filter(file__uploaded_by=request.user)
             result = queryset.get(id=id)
         except Result.DoesNotExist:
+            logger.warning("Export: result not found for id=%s", id)
             return Response(
                 {"error": "Report not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         export_format = request.query_params.get("format", "json").lower()
+        logger.info("Exporting as %s for report %s", export_format, id)
 
         from .services.report_export import export_as_json, export_as_pdf
-        from django.http import HttpResponse
 
         if export_format == "pdf":
             pdf_bytes = export_as_pdf(result)
             if pdf_bytes is None:
                 return Response(
-                    {"error": "PDF export unavailable. reportlab may not be installed."},
+                    {"error": "PDF export unavailable."},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
             filename = f"report_{result.file.sha256[:12]}.pdf"
-            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            from django.http import HttpResponse as DjangoResponse
+            response = DjangoResponse(pdf_bytes, content_type="application/pdf")
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-            log_audit(
-                request=request,
-                category="analysis",
-                action="Report exported (PDF)",
-                details={"report_id": str(result.id), "sha256": result.file.sha256},
-            )
+            response["Access-Control-Allow-Origin"] = "http://localhost:5173"
+            response["Access-Control-Allow-Credentials"] = "true"
+            response["Access-Control-Expose-Headers"] = "Content-Disposition"
             return response
 
         else:
-            # JSON export
             json_data = export_as_json(result)
             filename = f"report_{result.file.sha256[:12]}.json"
-
             from django.http import JsonResponse
             response = JsonResponse(json_data, json_dumps_params={"indent": 2})
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-            log_audit(
-                request=request,
-                category="analysis",
-                action="Report exported (JSON)",
-                details={"report_id": str(result.id), "sha256": result.file.sha256},
-            )
+            response["Access-Control-Allow-Origin"] = "http://localhost:5173"
+            response["Access-Control-Allow-Credentials"] = "true"
+            response["Access-Control-Expose-Headers"] = "Content-Disposition"
             return response

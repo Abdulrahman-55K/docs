@@ -1,336 +1,325 @@
-import React, { useState } from 'react';
-import {
-  Plus,
-  Edit2,
-  Trash2,
-  Eye,
-  EyeOff,
-  Upload,
-  CheckCircle,
-  AlertCircle,
-} from 'lucide-react';
-import Navigation from '../components/Navigation';
-
-interface YaraRule {
-  id: string;
-  name: string;
-  version: string;
-  status: 'active' | 'inactive';
-  updatedAt: string;
-}
-
-interface ApiKey {
-  id: string;
-  service: string;
-  status: 'active' | 'test';
-  lastUsed: string;
-}
+import React, { useState, useEffect, useRef } from "react";
+import { Plus, Trash2, Eye, EyeOff, Upload, CheckCircle, AlertCircle } from "lucide-react";
+import Navigation from "../components/Navigation";
+import { apiGet, apiPost, apiPatch, apiDelete, apiUpload } from "../lib/api";
 
 export default function AdminSettings() {
-  const [activeTab, setActiveTab] = useState<'yara' | 'api' | 'models'>('yara');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [editingRule, setEditingRule] = useState<YaraRule | null>(null);
-  const [newRuleName, setNewRuleName] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-
-  const yaraRules: YaraRule[] = [
-    {
-      id: '1',
-      name: 'SUSP_PDF_Embedded_JS',
-      version: '2.1',
-      status: 'active',
-      updatedAt: '2024-11-10',
-    },
-    {
-      id: '2',
-      name: 'MALWARE_Macro_Obfuscation',
-      version: '1.8',
-      status: 'active',
-      updatedAt: '2024-11-08',
-    },
-    {
-      id: '3',
-      name: 'SUSP_Macro_Presence',
-      version: '1.5',
-      status: 'inactive',
-      updatedAt: '2024-11-01',
-    },
-  ];
-
-  const apiKeys: ApiKey[] = [
-    {
-      id: '1',
-      service: 'VirusTotal',
-      status: 'active',
-      lastUsed: '2 hours ago',
-    },
-    {
-      id: '2',
-      service: 'VirusTotal (Test)',
-      status: 'test',
-      lastUsed: '1 day ago',
-    },
-  ];
-
-  const handleSaveRule = () => {
-    setSuccessMessage('YARA rule updated successfully');
-    setEditingRule(null);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
-  const handleAddRule = () => {
-    if (newRuleName.trim()) {
-      setSuccessMessage('YARA rule added successfully');
-      setNewRuleName('');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    }
-  };
+  const [activeTab, setActiveTab] = useState<"yara" | "api" | "models">("yara");
+  const [message, setMessage] = useState({ type: "", text: "" });
 
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">System Settings</h1>
-          <p className="text-lg text-slate-600">
-            Manage detection rules, API keys, and ML models
-          </p>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            System Configuration
+          </h1>
+          <p className="text-slate-600">Manage YARA rules, ML models, and API keys</p>
         </div>
 
-        {successMessage && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-green-800">{successMessage}</p>
-          </div>
-        )}
-
-        <div className="flex gap-0 mb-8 border-b border-slate-200">
-          <button
-            onClick={() => setActiveTab('yara')}
-            className={`px-6 py-3 font-medium border-b-2 transition ${
-              activeTab === 'yara'
-                ? 'border-teal-600 text-teal-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            YARA Rules
-          </button>
-          <button
-            onClick={() => setActiveTab('api')}
-            className={`px-6 py-3 font-medium border-b-2 transition ${
-              activeTab === 'api'
-                ? 'border-teal-600 text-teal-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            API Keys
-          </button>
-          <button
-            onClick={() => setActiveTab('models')}
-            className={`px-6 py-3 font-medium border-b-2 transition ${
-              activeTab === 'models'
-                ? 'border-teal-600 text-teal-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            ML Models
-          </button>
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 bg-slate-100 rounded-lg p-1 w-fit">
+          {(["yara", "models", "api"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => { setActiveTab(tab); setMessage({ type: "", text: "" }); }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === tab
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              {tab === "yara" ? "YARA Rules" : tab === "models" ? "ML Models" : "API Keys"}
+            </button>
+          ))}
         </div>
 
-        {activeTab === 'yara' && (
-          <div className="space-y-8">
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-slate-900">YARA Detection Rules</h2>
-                <button className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition">
-                  <Plus className="w-4 h-4" />
-                  Add Rule
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {yaraRules.map((rule) => (
-                  <div
-                    key={rule.id}
-                    className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
-                  >
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">{rule.name}</p>
-                      <p className="text-sm text-slate-600">
-                        Version {rule.version} • Updated {rule.updatedAt}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          rule.status === 'active'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-slate-100 text-slate-800'
-                        }`}
-                      >
-                        {rule.status}
-                      </span>
-                      <button className="p-2 hover:bg-slate-200 rounded-lg transition">
-                        <Edit2 className="w-4 h-4 text-slate-600" />
-                      </button>
-                      <button className="p-2 hover:bg-red-50 rounded-lg transition">
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-              <h3 className="text-xl font-bold text-slate-900 mb-4">Upload New Rules</h3>
-              <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-teal-500 transition cursor-pointer">
-                <Upload className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                <p className="font-medium text-slate-900 mb-1">Drop YARA rule files here</p>
-                <p className="text-sm text-slate-600">or click to browse</p>
-                <input type="file" className="hidden" accept=".yar,.yara" />
-              </div>
-            </div>
+        {message.text && (
+          <div className={`mb-4 p-4 rounded-lg flex items-start gap-3 ${
+            message.type === "success" ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"
+          }`}>
+            {message.type === "success" ? (
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            )}
+            <p className={`text-sm ${message.type === "success" ? "text-green-800" : "text-red-800"}`}>
+              {message.text}
+            </p>
           </div>
         )}
 
-        {activeTab === 'api' && (
-          <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-            <h2 className="text-2xl font-bold text-slate-900 mb-6">API Key Management</h2>
+        {activeTab === "yara" && <YaraTab onMessage={setMessage} />}
+        {activeTab === "models" && <ModelsTab onMessage={setMessage} />}
+        {activeTab === "api" && <ApiKeysTab onMessage={setMessage} />}
+      </div>
+    </div>
+  );
+}
 
-            <div className="space-y-6">
-              {apiKeys.map((key) => (
-                <div
-                  key={key.id}
-                  className="border border-slate-200 rounded-lg p-6 hover:bg-slate-50 transition"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <p className="font-semibold text-slate-900">{key.service}</p>
-                      <p className="text-sm text-slate-600">Last used: {key.lastUsed}</p>
-                    </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        key.status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}
-                    >
-                      {key.status}
-                    </span>
-                  </div>
+// --- YARA Rules Tab ---
+function YaraTab({ onMessage }: { onMessage: (m: { type: string; text: string }) => void }) {
+  const [rules, setRules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState("");
+  const [version, setVersion] = useState("1.0");
+  const fileRef = useRef<HTMLInputElement>(null);
 
-                  <div className="bg-slate-50 rounded-lg p-4 mb-4">
-                    <div className="flex items-center justify-between">
-                      <input
-                        type={showApiKey ? 'text' : 'password'}
-                        value="sk_live_•••••••••••••••••••••••••"
-                        readOnly
-                        className="flex-1 bg-transparent text-slate-900 font-mono text-sm outline-none"
-                      />
-                      <button
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="ml-2 p-2 hover:bg-slate-200 rounded transition"
-                      >
-                        {showApiKey ? (
-                          <EyeOff className="w-4 h-4 text-slate-600" />
-                        ) : (
-                          <Eye className="w-4 h-4 text-slate-600" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
+  const fetchRules = async () => {
+    const { data } = await apiGet("/admin-panel/yara-rules/");
+    if (data) setRules(data);
+    setLoading(false);
+  };
 
-                  <div className="flex gap-3">
-                    <button className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition">
-                      Rotate Key
-                    </button>
-                    <button className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition">
-                      Test Connection
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+  useEffect(() => { fetchRules(); }, []);
 
-            <div className="mt-8 border-t border-slate-200 pt-8">
-              <h3 className="font-semibold text-slate-900 mb-4">Add New API Key</h3>
-              <div className="space-y-4">
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const file = fileRef.current?.files?.[0];
+    if (!file || !name) return;
+
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("version", version);
+    formData.append("rule_file", file);
+    formData.append("status", "active");
+
+    const { data, error } = await apiUpload("/admin-panel/yara-rules/", formData);
+    if (error) {
+      onMessage({ type: "error", text: error });
+    } else {
+      onMessage({ type: "success", text: `YARA rule "${name}" uploaded.` });
+      setName("");
+      setVersion("1.0");
+      fetchRules();
+    }
+  };
+
+  const toggleStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === "active" ? "inactive" : "active";
+    await apiPatch(`/admin-panel/yara-rules/${id}/`, { status: newStatus });
+    fetchRules();
+  };
+
+  const deleteRule = async (id: string, ruleName: string) => {
+    if (!confirm(`Delete YARA rule "${ruleName}"?`)) return;
+    await apiDelete(`/admin-panel/yara-rules/${id}/`);
+    onMessage({ type: "success", text: `Rule "${ruleName}" deleted.` });
+    fetchRules();
+  };
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={handleUpload} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-4">Upload new rule set</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Rule name" required
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+          <input type="text" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="Version"
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+          <input type="file" ref={fileRef} accept=".yar,.yara" required className="text-sm" />
+        </div>
+        <button type="submit" className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 flex items-center gap-2">
+          <Upload className="w-4 h-4" /> Upload Rule
+        </button>
+      </form>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-4">Active rules</h3>
+        {loading ? <p className="text-slate-500 text-sm">Loading...</p> : rules.length === 0 ? (
+          <p className="text-slate-500 text-sm">No YARA rules configured.</p>
+        ) : (
+          <div className="space-y-2">
+            {rules.map((rule) => (
+              <div key={rule.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Service
-                  </label>
-                  <select className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none">
-                    <option>Select a service</option>
-                    <option>VirusTotal</option>
-                  </select>
+                  <p className="font-medium text-sm">{rule.name} <span className="text-slate-400">v{rule.version}</span></p>
+                  <p className="text-xs text-slate-500">Updated: {new Date(rule.updated_at).toLocaleDateString()}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    API Key
-                  </label>
-                  <input
-                    type="password"
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                    placeholder="Enter API key"
-                  />
+                <div className="flex items-center gap-2">
+                  <button onClick={() => toggleStatus(rule.id, rule.status)}
+                    className={`text-xs px-3 py-1 rounded font-medium ${
+                      rule.status === "active" ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600"
+                    }`}>
+                    {rule.status}
+                  </button>
+                  <button onClick={() => deleteRule(rule.id, rule.name)}
+                    className="p-1 text-slate-400 hover:text-red-600">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <button className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition">
-                  Save API Key
-                </button>
               </div>
-            </div>
+            ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
 
-        {activeTab === 'models' && (
-          <div className="space-y-8">
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6">ML Model Management</h2>
+// --- ML Models Tab ---
+function ModelsTab({ onMessage }: { onMessage: (m: { type: string; text: string }) => void }) {
+  const [models, setModels] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [version, setVersion] = useState("");
+  const [description, setDescription] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
-              <div className="bg-gradient-to-r from-teal-50 to-teal-100 rounded-lg p-6 border border-teal-200 mb-8">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-slate-900">Current Model</p>
-                    <p className="text-slate-700 mt-1">v3.2 • Updated Nov 10, 2024</p>
-                  </div>
-                  <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                    Active
-                  </span>
+  const fetchModels = async () => {
+    const { data } = await apiGet("/admin-panel/ml-models/");
+    if (data) setModels(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchModels(); }, []);
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const file = fileRef.current?.files?.[0];
+    if (!file || !version) return;
+
+    const formData = new FormData();
+    formData.append("version", version);
+    formData.append("description", description);
+    formData.append("model_file", file);
+
+    const { data, error } = await apiUpload("/admin-panel/ml-models/", formData);
+    if (error) {
+      onMessage({ type: "error", text: error });
+    } else {
+      onMessage({ type: "success", text: `Model v${version} uploaded.` });
+      setVersion("");
+      setDescription("");
+      fetchModels();
+    }
+  };
+
+  const promoteModel = async (id: string, ver: string) => {
+    const { error } = await apiPost(`/admin-panel/ml-models/${id}/promote/`);
+    if (error) {
+      onMessage({ type: "error", text: error });
+    } else {
+      onMessage({ type: "success", text: `Model v${ver} is now active.` });
+      fetchModels();
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={handleUpload} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-4">Upload new model</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <input type="text" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="Version (e.g. 1.0)" required
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+          <input type="file" ref={fileRef} accept=".pkl,.joblib,.h5,.onnx" required className="text-sm" />
+        </div>
+        <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)"
+          className="mt-3 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+        <button type="submit" className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 flex items-center gap-2">
+          <Upload className="w-4 h-4" /> Upload Model
+        </button>
+      </form>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-4">Model versions</h3>
+        {loading ? <p className="text-slate-500 text-sm">Loading...</p> : models.length === 0 ? (
+          <p className="text-slate-500 text-sm">No models uploaded.</p>
+        ) : (
+          <div className="space-y-2">
+            {models.map((model) => (
+              <div key={model.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-sm">v{model.version} {model.is_active && <span className="text-green-600">[ACTIVE]</span>}</p>
+                  <p className="text-xs text-slate-500">{model.description || "No description"} — {new Date(model.created_at).toLocaleDateString()}</p>
                 </div>
+                {!model.is_active && (
+                  <button onClick={() => promoteModel(model.id, model.version)}
+                    className="text-xs px-3 py-1 bg-teal-100 text-teal-700 rounded font-medium hover:bg-teal-200">
+                    Promote
+                  </button>
+                )}
               </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-              <div className="border-t border-slate-200 pt-6">
-                <h3 className="font-semibold text-slate-900 mb-4">Previous Versions</h3>
-                <div className="space-y-3">
-                  {['v3.1', 'v3.0', 'v2.9'].map((version) => (
-                    <div
-                      key={version}
-                      className="flex items-center justify-between p-4 border border-slate-200 rounded-lg"
-                    >
-                      <p className="font-medium text-slate-900">{version}</p>
-                      <button className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition">
-                        Rollback
-                      </button>
-                    </div>
-                  ))}
+// --- API Keys Tab ---
+function ApiKeysTab({ onMessage }: { onMessage: (m: { type: string; text: string }) => void }) {
+  const [keys, setKeys] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [service, setService] = useState("virustotal");
+  const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+
+  const fetchKeys = async () => {
+    const { data } = await apiGet("/admin-panel/api-keys/");
+    if (data) setKeys(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchKeys(); }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!apiKey) return;
+
+    const { error } = await apiPost("/admin-panel/api-keys/", { service, api_key: apiKey });
+    if (error) {
+      onMessage({ type: "error", text: error });
+    } else {
+      onMessage({ type: "success", text: `API key for "${service}" saved.` });
+      setApiKey("");
+      fetchKeys();
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <form onSubmit={handleSave} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-4">Add / rotate API key</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <select value={service} onChange={(e) => setService(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            <option value="virustotal">VirusTotal</option>
+          </select>
+          <div className="relative">
+            <input type={showKey ? "text" : "password"} value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Paste API key" required
+              className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg text-sm" />
+            <button type="button" onClick={() => setShowKey(!showKey)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">
+              {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+        <button type="submit" className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">
+          Save Key
+        </button>
+      </form>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-semibold text-slate-900 mb-4">Configured keys</h3>
+        {loading ? <p className="text-slate-500 text-sm">Loading...</p> : keys.length === 0 ? (
+          <p className="text-slate-500 text-sm">No API keys configured.</p>
+        ) : (
+          <div className="space-y-2">
+            {keys.map((key) => (
+              <div key={key.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-sm capitalize">{key.service}</p>
+                  <p className="text-xs text-slate-500">Key: {key.key_preview} — Rotated: {new Date(key.last_rotated).toLocaleDateString()}</p>
                 </div>
+                <span className={`text-xs px-2 py-1 rounded font-medium ${
+                  key.status === "active" ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600"
+                }`}>{key.status}</span>
               </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-              <h3 className="font-semibold text-slate-900 mb-4">Upload New Model</h3>
-              <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-teal-500 transition cursor-pointer">
-                <Upload className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                <p className="font-medium text-slate-900 mb-1">Drop model file here</p>
-                <p className="text-sm text-slate-600 mb-4">or click to browse (.pkl, .h5, .pth)</p>
-                <input type="file" className="hidden" accept=".pkl,.h5,.pth" />
-                <p className="text-xs text-slate-500 mt-4">
-                  Recommended: Validate model before deploying to production
-                </p>
-              </div>
-            </div>
+            ))}
           </div>
         )}
       </div>

@@ -1,231 +1,157 @@
-import React, { useState } from 'react';
-import { Filter, Search, Clock, User, Activity } from 'lucide-react';
-import Navigation from '../components/Navigation';
-
-interface ActivityLogEntry {
-  id: string;
-  user: string;
-  role: 'admin' | 'analyst';
-  action: string;
-  target: string;
-  createdAt: string;
-}
-
-const MOCK_ACTIVITY: ActivityLogEntry[] = [
-  {
-    id: '1',
-    user: 'sara.admin@example.com',
-    role: 'admin',
-    action: 'Successful login',
-    target: 'Signed in from 192.168.1.20',
-    createdAt: '2024-11-13 10:32',
-  },
-  {
-    id: '2',
-    user: 'sara.admin@example.com',
-    role: 'admin',
-    action: 'Failed login',
-    target: 'Wrong password from 192.168.1.20',
-    createdAt: '2024-11-13 10:29',
-  },
-  {
-    id: '3',
-    user: 'new.analyst@example.com',
-    role: 'analyst',
-    action: 'Signup',
-    target: 'Created new analyst account',
-    createdAt: '2024-11-13 09:15',
-  },
-  {
-    id: '4',
-    user: 'ali.analyst@example.com',
-    role: 'analyst',
-    action: 'Requested password reset',
-    target: 'Reset email sent',
-    createdAt: '2024-11-13 08:47',
-  },
-  {
-    id: '5',
-    user: 'mohammed.analyst@example.com',
-    role: 'analyst',
-    action: 'Uploaded document',
-    target: 'invoice_q4_2024.pdf',
-    createdAt: '2024-11-13 08:21',
-  },
-  {
-    id: '6',
-    user: 'sara.admin@example.com',
-    role: 'admin',
-    action: 'Updated YARA rule',
-    target: 'SUSP_PDF_Embedded_JS',
-    createdAt: '2024-11-12 18:07',
-  },
-  {
-    id: '7',
-    user: 'sara.admin@example.com',
-    role: 'admin',
-    action: 'Rotated API key',
-    target: 'VirusTotal',
-    createdAt: '2024-11-12 17:55',
-  },
-];
+import React, { useState, useEffect } from "react";
+import { Filter, Search, Clock, User, Activity } from "lucide-react";
+import Navigation from "../components/Navigation";
+import { apiGet } from "../lib/api";
 
 export default function AdminActivityLog() {
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'analyst'>('all');
-  const [search, setSearch] = useState('');
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const filtered = MOCK_ACTIVITY.filter((entry) => {
-    const matchesRole = roleFilter === 'all' || entry.role === roleFilter;
-    const matchesSearch =
-      !search ||
-      entry.user.toLowerCase().includes(search.toLowerCase()) ||
-      entry.action.toLowerCase().includes(search.toLowerCase()) ||
-      entry.target.toLowerCase().includes(search.toLowerCase());
-    return matchesRole && matchesSearch;
-  });
+  const fetchLogs = async () => {
+    setLoading(true);
+    let endpoint = "/admin-panel/audit-logs/";
+    const params = new URLSearchParams();
+    if (categoryFilter) params.set("category", categoryFilter);
+    if (searchQuery) params.set("action", searchQuery);
+    if (params.toString()) endpoint += `?${params.toString()}`;
+
+    const { data } = await apiGet<{ results: any[] }>(endpoint);
+    if (data) {
+      setLogs(data.results || []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, [categoryFilter]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchLogs();
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "auth":
+        return "bg-blue-100 text-blue-700";
+      case "upload":
+        return "bg-teal-100 text-teal-700";
+      case "analysis":
+        return "bg-purple-100 text-purple-700";
+      case "config":
+        return "bg-amber-100 text-amber-700";
+      case "admin":
+        return "bg-red-100 text-red-700";
+      default:
+        return "bg-slate-100 text-slate-700";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-slate-900 mb-2">Activity Log</h1>
-            <p className="text-lg text-slate-600">
-              See who did what and when across the system
-            </p>
-          </div>
-        </header>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            Activity Log
+          </h1>
+          <p className="text-slate-600">System audit trail</p>
+        </div>
 
-        <section className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex-1 flex items-center gap-3">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+        {/* Filters */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-wrap gap-4 items-center">
+          <form onSubmit={handleSearch} className="flex-1 flex gap-2">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by user, action, or resource"
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm bg-white"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by action..."
+                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
               />
             </div>
-          </div>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700"
+            >
+              Search
+            </button>
+          </form>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-              Filter by role
-            </span>
-            <div className="inline-flex rounded-lg border border-slate-200 bg-white overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setRoleFilter('all')}
-                className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1 ${
-                  roleFilter === 'all'
-                    ? 'bg-teal-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <Filter className="w-3 h-3" />
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleFilter('admin')}
-                className={`px-3 py-1.5 text-xs font-medium ${
-                  roleFilter === 'admin'
-                    ? 'bg-teal-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleFilter('analyst')}
-                className={`px-3 py-1.5 text-xs font-medium ${
-                  roleFilter === 'analyst'
-                    ? 'bg-teal-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Analyst
-              </button>
-            </div>
-          </div>
-        </section>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+          >
+            <option value="">All categories</option>
+            <option value="auth">Authentication</option>
+            <option value="upload">Upload</option>
+            <option value="analysis">Analysis</option>
+            <option value="config">Configuration</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
 
-        <section className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-teal-600" />
-              <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wide">
-                Recent Activity
-              </h2>
-            </div>
-            <p className="text-xs text-slate-500">
-              Showing {filtered.length} of {MOCK_ACTIVITY.length} events
-            </p>
+        {/* Log entries */}
+        {loading ? (
+          <div className="text-center py-12 text-slate-500">Loading logs...</div>
+        ) : logs.length === 0 ? (
+          <div className="text-center py-12">
+            <Activity className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-500">No log entries found.</p>
           </div>
-
-          {filtered.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-slate-500">
-              No activity found for the selected filters.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      User
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Action
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Resource
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      When
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filtered.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
-                            <User className="w-4 h-4 text-teal-700" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-slate-900">{entry.user}</p>
-                            <p className="text-xs text-slate-500 capitalize">{entry.role}</p>
-                          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="divide-y divide-slate-100">
+              {logs.map((log) => (
+                <div
+                  key={log.id}
+                  className="p-4 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5">
+                        <User className="w-4 h-4 text-slate-400" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm text-slate-900">
+                          {log.action}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-slate-500">
+                            {log.user_email}
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded font-medium ${getCategoryColor(
+                              log.category
+                            )}`}
+                          >
+                            {log.category}
+                          </span>
+                          {log.ip_address && (
+                            <span className="text-xs text-slate-400">
+                              IP: {log.ip_address}
+                            </span>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="font-medium text-slate-900">{entry.action}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-slate-800">{entry.target}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <Clock className="w-4 h-4" />
-                          <span className="text-xs">{entry.createdAt}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {new Date(log.occurred_at).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </section>
-      </main>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-

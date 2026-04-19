@@ -1,296 +1,357 @@
-import React from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
-  FileText,
-  Calendar,
-  Shield,
-  Download,
-  ArrowLeft,
-  CheckCircle,
-  AlertTriangle,
-  TrendingUp,
-  Zap,
-} from 'lucide-react';
-import Navigation from '../components/Navigation';
+  FileText, Calendar, Shield, Download, ArrowLeft,
+  CheckCircle, AlertTriangle, TrendingUp, Zap,
+} from "lucide-react";
+import Navigation from "../components/Navigation";
+import { apiGet } from "../lib/api";
 
-interface ReportDetailData {
+interface ReportData {
   id: string;
-  filename: string;
-  uploadDate: string;
-  fileSize: string;
-  fileHash: string;
-  status: 'benign' | 'suspicious' | 'malicious' | 'need_review';
-  score: number;
-  yaraMatches: Array<{ rule: string; severity: 'low' | 'medium' | 'high'; offset: string }>;
-  vtDetections: { detections: number; total: number; engines: string[] };
-  mlClassification: { label: string; score: number; entropy: number; macroCount: number };
-  relatedCluster: { count: number; samples: string[] };
-  notes: string;
+  file: {
+    id: string;
+    sha256: string;
+    original_name: string;
+    mime: string;
+    file_size: number;
+    status: string;
+    created_at: string;
+  };
+  ml_label: string;
+  ml_score: number;
+  vt_summary_json: any;
+  banner: string;
+  top_features: any[];
+  yara_hits: any[];
+  cluster: any;
+  created_at: string;
 }
 
-const mockReports: Record<string, ReportDetailData> = {
-  '1': {
-    id: '1',
-    filename: 'document_v2.pdf',
-    uploadDate: '2024-11-13',
-    fileSize: '1.8 MB',
-    fileHash: '5f2c1a7b4d9e8c3f6a1b2c3d4e5f6789abcdef0123456789abcdef0123456789',
-    status: 'benign',
-    score: 15,
-    yaraMatches: [
-      { rule: 'CLEAN_PDF_Metadata', severity: 'low', offset: '0x0120' },
-    ],
-    vtDetections: {
-      detections: 0,
-      total: 71,
-      engines: [],
-    },
-    mlClassification: {
-      label: 'benign',
-      score: 0.11,
-      entropy: 4.2,
-      macroCount: 0,
-    },
-    relatedCluster: {
-      count: 4,
-      samples: ['09adf...', '127bae...', '99d10f...', '54ca2b...'],
-    },
-    notes: 'No suspicious indicators were observed. Metadata and embedded objects appeared clean.',
-  },
-  '2': {
-    id: '2',
-    filename: 'invoice_template.docx',
-    uploadDate: '2024-11-12',
-    fileSize: '3.2 MB',
-    fileHash: 'd4c3b2a1f6789e0d1c2b3a4f5e6d7c8b9a0f1e2d3c4b5a697887766554433221',
-    status: 'suspicious',
-    score: 62,
-    yaraMatches: [
-      { rule: 'SUSP_Macro_Presence', severity: 'medium', offset: '0x5680' },
-      { rule: 'MALDOC_RTF_Embedded_Object', severity: 'high', offset: '0x89d0' },
-    ],
-    vtDetections: {
-      detections: 3,
-      total: 71,
-      engines: ['TrendMicro', 'Kaspersky', 'ESET'],
-    },
-    mlClassification: {
-      label: 'suspicious',
-      score: 0.62,
-      entropy: 7.8,
-      macroCount: 5,
-    },
-    relatedCluster: {
-      count: 12,
-      samples: ['f92ab...', '0f1c2...', 'adbe11...'],
-    },
-    notes:
-      'Macros found with obfuscated strings. Recommend sandbox execution before releasing to end users.',
-  },
-};
-
 export default function ReportDetail() {
-  const { id: paramId } = useParams();
+  const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
+  const [report, setReport] = useState<ReportData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const requestedId = (location.state as { reportId?: string } | null)?.reportId ?? paramId ?? '1';
-  const report = mockReports[requestedId] ?? mockReports['1'];
+  useEffect(() => {
+    const fetchReport = async () => {
+      const { data, error: fetchError } = await apiGet<ReportData>(
+        `/analysis/reports/${id}/`
+      );
+      if (data) {
+        setReport(data);
+      } else {
+        setError(fetchError || "Report not found");
+      }
+      setLoading(false);
+    };
+    fetchReport();
+  }, [id]);
 
-  const handleExport = () => {
-    console.log(`Exporting report ${report.id}...`);
+  const handleExport = (format: string) => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
+    fetch(`http://127.0.0.1:8000/api/v1/analysis/reports/${id}/export/?format=${format}`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    })
+      .then(res => res.blob())
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `report_${report?.file.sha256?.slice(0, 12)}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(err => console.error("Export error:", err));
   };
+
+  const getBannerStyle = (banner: string) => {
+    switch (banner) {
+      case "clean":
+        return "bg-green-100 text-green-800 border-green-300";
+      case "suspicious":
+        return "bg-amber-100 text-amber-800 border-amber-300";
+      case "malicious":
+        return "bg-red-100 text-red-800 border-red-300";
+      default:
+        return "bg-blue-100 text-blue-800 border-blue-300";
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Navigation />
+        <div className="flex items-center justify-center py-20">
+          <p className="text-slate-500">Loading report...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !report) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Navigation />
+        <div className="max-w-4xl mx-auto px-4 py-12">
+          <p className="text-red-600">{error || "Report not found"}</p>
+          <button
+            onClick={() => navigate("/reports")}
+            className="mt-4 text-teal-600 hover:text-teal-700"
+          >
+            ← Back to reports
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
       <Navigation />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <button
-          onClick={() => navigate('/reports')}
-          className="flex items-center gap-2 text-teal-600 hover:text-teal-700 font-medium mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Reports
-        </button>
-
-        <div className="mb-8">
-          <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate("/reports")}
+              className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-slate-600" />
+            </button>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 mb-2">{report.filename}</h1>
-              <p className="text-slate-600">
-                Uploaded on {report.uploadDate} • {report.fileSize}
+              <h1 className="text-2xl font-bold text-slate-900">
+                {report.file.original_name}
+              </h1>
+              <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
+                <Calendar className="w-4 h-4" />
+                {new Date(report.file.created_at).toLocaleString()}
               </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition"
-              >
-                <Download className="w-4 h-4" />
-                Export Report
-              </button>
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-teal-50 to-teal-100 rounded-xl p-6 border border-teal-200">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleExport("json")}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              JSON
+            </button>
+            <button
+              onClick={() => handleExport("pdf")}
+              className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              PDF
+            </button>
+          </div>
+        </div>
+
+        {/* Verdict Banner */}
+        <div
+          className={`rounded-xl border-2 p-6 mb-8 ${getBannerStyle(report.banner)}`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="w-8 h-8" />
               <div>
-                <p className="text-sm text-slate-600 mb-1">Status</p>
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
-                  <span className="font-semibold text-slate-900 capitalize">
-                    {report.status}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-slate-600 mb-1">Risk Score</p>
-                <p className="text-3xl font-bold text-slate-900">{report.score}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-600 mb-1">YARA Matches</p>
-                <p className="text-3xl font-bold text-slate-900">{report.yaraMatches.length}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-600 mb-1">VT Detections</p>
-                <p className="text-3xl font-bold text-slate-900">
-                  {report.vtDetections.detections}/{report.vtDetections.total}
+                <p className="text-2xl font-bold">
+                  {report.banner.toUpperCase()}
                 </p>
+                <p className="text-sm opacity-75">Analysis verdict</p>
               </div>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold">
+                {(report.ml_score * 100).toFixed(0)}%
+              </p>
+              <p className="text-sm opacity-75">Risk score</p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6">File Information</h2>
-              <dl className="space-y-4">
-                <div className="flex justify-between items-start">
-                  <dt className="font-medium text-slate-700">SHA256</dt>
-                  <dd className="text-sm text-slate-600 font-mono">{report.fileHash}</dd>
-                </div>
-                <div className="flex justify-between items-start">
-                  <dt className="font-medium text-slate-700">File Size</dt>
-                  <dd className="text-sm text-slate-600">{report.fileSize}</dd>
-                </div>
-                <div className="flex justify-between items-start">
-                  <dt className="font-medium text-slate-700">Upload Date</dt>
-                  <dd className="text-sm text-slate-600">{report.uploadDate}</dd>
-                </div>
-              </dl>
+        {/* File Info */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+            File Information
+          </h2>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-slate-500">Filename</p>
+              <p className="font-medium text-slate-900">
+                {report.file.original_name}
+              </p>
             </div>
-
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <Zap className="w-6 h-6 text-amber-600" />
-                YARA Rule Matches
-              </h2>
-              {report.yaraMatches.length > 0 ? (
-                <div className="space-y-4">
-                  {report.yaraMatches.map((match, idx) => (
-                    <div
-                      key={idx}
-                      className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <span className="font-semibold text-slate-900">{match.rule}</span>
-                        <span
-                          className={`text-xs font-bold px-3 py-1 rounded-full ${
-                            match.severity === 'high'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}
-                        >
-                          {match.severity}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-600 font-mono">Offset: {match.offset}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-slate-600">No YARA rule matches found.</p>
-              )}
+            <div>
+              <p className="text-slate-500">Type</p>
+              <p className="font-medium text-slate-900">{report.file.mime}</p>
             </div>
+            <div>
+              <p className="text-slate-500">Size</p>
+              <p className="font-medium text-slate-900">
+                {(report.file.file_size / 1024 / 1024).toFixed(2)} MB
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-500">SHA-256</p>
+              <p className="font-mono text-xs text-slate-700 break-all">
+                {report.file.sha256}
+              </p>
+            </div>
+          </div>
+        </div>
 
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <Shield className="w-6 h-6 text-teal-600" />
-                VirusTotal Analysis
-              </h2>
-              <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-lg p-6 border border-teal-200 mb-4">
-                <p className="text-sm text-slate-600 mb-1">Detection Ratio</p>
-                <p className="text-3xl font-bold text-slate-900">
-                  {report.vtDetections.detections}/{report.vtDetections.total}
-                </p>
-              </div>
-              <p className="text-sm text-slate-600 mb-3">Detected by:</p>
-              <div className="flex flex-wrap gap-2">
-                {report.vtDetections.engines.map((engine, idx) => (
+        {/* Detection Evidence */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-teal-600" />
+            Detection Evidence
+          </h2>
+          {report.top_features && report.top_features.length > 0 ? (
+            <div className="space-y-3">
+              {report.top_features.map((feat: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg"
+                >
+                  <Zap className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-sm text-slate-900">
+                      {feat.feature?.replace(/_/g, " ")}
+                    </p>
+                    <p className="text-sm text-slate-600">{feat.detail}</p>
+                    {feat.weight && (
+                      <span
+                        className={`inline-block mt-1 text-xs px-2 py-0.5 rounded ${
+                          feat.weight === "high"
+                            ? "bg-red-100 text-red-700"
+                            : feat.weight === "medium"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {feat.weight} weight
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">
+              No specific indicators detected.
+            </p>
+          )}
+        </div>
+
+        {/* YARA Matches */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+            YARA Matches
+          </h2>
+          {report.yara_hits && report.yara_hits.length > 0 ? (
+            <div className="space-y-2">
+              {report.yara_hits.map((hit: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
+                >
+                  <div>
+                    <p className="font-medium text-sm text-slate-900">
+                      {hit.rule_name}
+                    </p>
+                    {hit.details?.tags?.length > 0 && (
+                      <p className="text-xs text-slate-500">
+                        Tags: {hit.details.tags.join(", ")}
+                      </p>
+                    )}
+                  </div>
                   <span
-                    key={idx}
-                    className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm"
+                    className={`text-xs px-2 py-1 rounded font-medium ${
+                      hit.details?.severity === "high"
+                        ? "bg-red-100 text-red-700"
+                        : hit.details?.severity === "medium"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-green-100 text-green-700"
+                    }`}
                   >
-                    {engine}
+                    {hit.details?.severity || "medium"}
                   </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8">
-              <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <TrendingUp className="w-6 h-6 text-teal-600" />
-                ML Classification
-              </h2>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-600 mb-1">Label</p>
-                  <p className="font-semibold text-slate-900 capitalize">
-                    {report.mlClassification.label}
-                  </p>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-600 mb-1">Confidence</p>
-                  <p className="font-semibold text-slate-900">
-                    {(report.mlClassification.score * 100).toFixed(1)}%
-                  </p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-600 mb-1">Entropy</p>
-                  <p className="font-semibold text-slate-900">{report.mlClassification.entropy}</p>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <p className="text-sm text-slate-600 mb-1">Macro Count</p>
-                  <p className="font-semibold text-slate-900">
-                    {report.mlClassification.macroCount}
-                  </p>
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
-              <h3 className="font-semibold text-slate-900 mb-4">Related Cluster</h3>
-              <p className="text-2xl font-bold text-teal-600 mb-3">{report.relatedCluster.count}</p>
-              <p className="text-sm text-slate-600 mb-4">
-                Similar samples found in the detection database
-              </p>
-              <button className="w-full px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition">
-                View Cluster
-              </button>
-            </div>
-
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
-              <p className="text-sm text-slate-700">
-                <span className="font-semibold">Note:</span> This report is automatically generated
-                based on multiple detection engines. Review results carefully before taking action.
-              </p>
-            </div>
-          </div>
+          ) : (
+            <p className="text-slate-500 text-sm">No YARA rules matched.</p>
+          )}
         </div>
+
+        {/* VirusTotal */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">
+            VirusTotal Enrichment
+          </h2>
+          {report.vt_summary_json ? (
+            <div>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="bg-red-50 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-red-600">
+                    {report.vt_summary_json.malicious || 0}
+                  </p>
+                  <p className="text-xs text-red-600">Malicious</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-amber-600">
+                    {report.vt_summary_json.suspicious || 0}
+                  </p>
+                  <p className="text-xs text-amber-600">Suspicious</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {report.vt_summary_json.harmless || 0}
+                  </p>
+                  <p className="text-xs text-green-600">Harmless</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Total engines: {report.vt_summary_json.total_engines || 0} |
+                Status: {report.vt_summary_json.enrichment_status}
+              </p>
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">VT enrichment unavailable.</p>
+          )}
+        </div>
+
+        {/* Cluster Info */}
+        {report.cluster && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              Campaign Cluster
+            </h2>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-slate-500">Cluster name</p>
+                <p className="font-medium text-slate-900">
+                  {report.cluster.name}
+                </p>
+              </div>
+              <div>
+                <p className="text-slate-500">Cluster size</p>
+                <p className="font-medium text-slate-900">
+                  {report.cluster.size} files
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

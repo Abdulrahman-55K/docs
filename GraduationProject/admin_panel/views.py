@@ -83,14 +83,7 @@ class DashboardView(APIView):
         # --- ML success rate ---
         total_results = Result.objects.count()
         if total_results > 0:
-            ml_model_count = Result.objects.exclude(
-                top_features__contains=[{"feature": "no_indicators"}]
-            ).filter(
-                ml_label__in=["clean", "suspicious", "malicious"],
-            ).count()
-            ml_fallback = Result.objects.filter(
-                ml_label="needs_review",
-            ).count()
+            ml_fallback = Result.objects.filter(ml_label="needs_review").count()
             ml_success_rate = round(
                 (total_results - ml_fallback) / total_results * 100, 1
             )
@@ -101,15 +94,12 @@ class DashboardView(APIView):
 
         # --- VT success rate ---
         if total_results > 0:
-            vt_success = Result.objects.filter(
-                vt_summary_json__enrichment_status__startswith="success",
-            ).count()
-            vt_not_found = Result.objects.filter(
-                vt_summary_json__enrichment_status="not_found",
-            ).count()
-            vt_success_rate = round(
-                (vt_success + vt_not_found) / total_results * 100, 1
-            )
+            vt_available = 0
+            for r in Result.objects.all():
+                vt_status = r.vt_summary_json.get("enrichment_status", "")
+                if vt_status.startswith("success") or vt_status == "not_found":
+                    vt_available += 1
+            vt_success_rate = round(vt_available / total_results * 100, 1)
         else:
             vt_success_rate = 0.0
 

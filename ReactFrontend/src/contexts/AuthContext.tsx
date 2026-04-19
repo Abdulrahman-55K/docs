@@ -1,176 +1,186 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
-import { logActivity } from '../lib/activityLog';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import {
+  apiPost,
+  apiGet,
+  setTokens,
+  clearTokens,
+  getAccessToken,
+} from "../lib/api";
 
-type UserRole = 'analyst' | 'admin';
+type UserRole = "analyst" | "admin";
+
+interface User {
+  id: string;
+  email: string;
+  role: UserRole;
+  is_verified: boolean;
+  created_at: string;
+}
 
 interface AuthContextType {
-  session: Session | null;
-  user: any;
+  user: User | null;
   loading: boolean;
-  authDisabled: boolean;
   role: UserRole;
-  switchRole: (role: UserRole) => void;
-  signUp: (email: string, password: string) => Promise<any>;
-  signIn: (email: string, password: string) => Promise<any>;
+  signUp: (
+    email: string,
+    password: string,
+    passwordConfirm: string
+  ) => Promise<{ error?: string }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<any>;
+  resetPassword: (email: string) => Promise<{ error?: string }>;
+  resetPasswordConfirm: (
+    email: string,
+    code: string,
+    newPassword: string,
+    newPasswordConfirm: string
+  ) => Promise<{ error?: string }>;
+  verifyOTP: (
+    email: string,
+    code: string,
+    purpose: string
+  ) => Promise<{ error?: string }>;
+  resendOTP: (
+    email: string,
+    purpose: string
+  ) => Promise<{ error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<UserRole>('analyst');
-  const authDisabled = !supabase;
+  const [role, setRole] = useState<UserRole>("analyst");
 
+  // On mount, check if we have a valid token and fetch user profile
   useEffect(() => {
-    const getSession = async () => {
-      if (!supabase) {
+    const initAuth = async () => {
+      const token = getAccessToken();
+      if (!token) {
         setLoading(false);
         return;
       }
 
-      const { data, error } = await supabase.auth.getSession();
-      if (!error && data.session) {
-        setSession(data.session);
-        setUser(data.session.user);
-        const metadataRole = data.session.user.user_metadata?.role;
-        if (metadataRole === 'admin' || metadataRole === 'analyst') {
-          setRole(metadataRole);
-        }
+      const { data, error } = await apiGet<User>("/auth/me/");
+      if (data && !error) {
+        setUser(data);
+        setRole(data.role);
+      } else {
+        // Token expired or invalid
+        clearTokens();
       }
       setLoading(false);
     };
 
-    getSession();
-
-    if (!supabase) {
-      return;
-    }
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user || null);
-      const metadataRole = newSession?.user.user_metadata?.role;
-      if (metadataRole === 'admin' || metadataRole === 'analyst') {
-        setRole(metadataRole);
-      }
-    });
-
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
+    initAuth();
   }, []);
 
-  const signUp = async (email: string, password: string) => {
-    if (!supabase) {
-      return Promise.resolve({ data: null, error: null });
-    }
-
-    const result = await supabase.auth.signUp({
+  const signUp = async (
+    email: string,
+    password: string,
+    passwordConfirm: string
+  ) => {
+    const { data, error } = await apiPost("/auth/signup/", {
       email,
       password,
+      password_confirm: passwordConfirm,
     });
+    if (error) return { error };
+    return {};
+  };
 
-    await logActivity({
-      category: 'auth',
-      action: 'signup',
-      status: result.error ? 'failure' : 'success',
-      description: result.error?.message,
+  const verifyOTP = async (email: string, code: string, purpose: string) => {
+    const { data, error } = await apiPost("/auth/verify-otp/", {
       email,
+      code,
+      purpose,
     });
+    if (error) return { error };
+    return {};
+  };
 
-    return result;
+  const resendOTP = async (email: string, purpose: string) => {
+    const { data, error } = await apiPost("/auth/resend-otp/", {
+      email,
+      purpose,
+    });
+    if (error) return { error };
+    return {};
   };
 
   const signIn = async (email: string, password: string) => {
-    if (!supabase) {
-      return Promise.resolve({ data: null, error: null });
+    const { data, error } = await apiPost<{
+      tokens: { access: string; refresh: string };
+      user: User;
+    }>("/auth/login/", { email, password });
+
+    if (error) return { error };
+    if (data) {
+      setTokens(data.tokens.access, data.tokens.refresh);
+      setUser(data.user);
+      setRole(data.user.role);
     }
-
-    const result = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    await logActivity({
-      category: 'auth',
-      action: 'login',
-      status: result.error ? 'failure' : 'success',
-      description: result.error?.message,
-      email,
-    });
-
-    return result;
+    return {};
   };
 
   const signOut = async () => {
-    if (!supabase) {
-      setSession(null);
-      setUser(null);
-      setRole('analyst');
-      return;
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (refreshToken) {
+      await apiPost("/auth/logout/", { refresh: refreshToken });
     }
-
-    const { error } = await supabase.auth.signOut();
-
-    await logActivity({
-      category: 'auth',
-      action: 'logout',
-      status: error ? 'failure' : 'success',
-      description: error?.message,
-      email: user?.email,
-    });
+    clearTokens();
+    setUser(null);
+    setRole("analyst");
   };
 
   const resetPassword = async (email: string) => {
-    if (!supabase) {
-      return Promise.resolve({ data: null, error: null });
-    }
+    const { data, error } = await apiPost("/auth/password-reset/", { email });
+    if (error) return { error };
+    return {};
+  };
 
-    const result = await supabase.auth.resetPasswordForEmail(email);
-
-    await logActivity({
-      category: 'auth',
-      action: 'reset_password',
-      status: result.error ? 'failure' : 'success',
-      description: result.error?.message,
+  const resetPasswordConfirm = async (
+    email: string,
+    code: string,
+    newPassword: string,
+    newPasswordConfirm: string
+  ) => {
+    const { data, error } = await apiPost("/auth/password-reset/confirm/", {
       email,
+      code,
+      new_password: newPassword,
+      new_password_confirm: newPasswordConfirm,
     });
-
-    return result;
+    if (error) return { error };
+    return {};
   };
 
   const value: AuthContextType = {
-    session,
     user,
     loading,
-    authDisabled,
     role,
-    switchRole: (nextRole: UserRole) => {
-      if (nextRole !== role && (nextRole === 'analyst' || nextRole === 'admin')) {
-        if (authDisabled) {
-          setRole(nextRole);
-        }
-      }
-    },
     signUp,
     signIn,
     signOut,
     resetPassword,
+    resetPasswordConfirm,
+    verifyOTP,
+    resendOTP,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
