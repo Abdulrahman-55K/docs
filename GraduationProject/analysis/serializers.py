@@ -47,12 +47,20 @@ class YaraHitSerializer(serializers.ModelSerializer):
 class ClusterSerializer(serializers.ModelSerializer):
     """Campaign cluster info for a report."""
 
-    size = serializers.IntegerField(read_only=True)
+    # Reads the cluster_size annotation added by ReportDetailView.get_queryset()
+    # instead of the Cluster.size @property, which would issue one extra DB
+    # query per result when serializing a list.
+    size = serializers.SerializerMethodField()
 
     class Meta:
         model = Cluster
         fields = ["id", "name", "repr_sha256", "size", "first_seen", "last_seen"]
         read_only_fields = fields
+
+    def get_size(self, obj):
+        # Use the annotated value if present, fall back to the @property
+        # so the serializer still works if called outside ReportDetailView.
+        return getattr(obj, "cluster_size", None) or obj.size
 
 
 class ReportListSerializer(serializers.ModelSerializer):
@@ -113,3 +121,4 @@ class ReportDetailSerializer(serializers.ModelSerializer):
     def get_yara_hits(self, obj):
         hits = obj.file.yara_hits.all()
         return YaraHitSerializer(hits, many=True).data
+       

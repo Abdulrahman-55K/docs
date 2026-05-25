@@ -93,12 +93,14 @@ class DashboardView(APIView):
             ml_fallback_rate = 0.0
 
         # --- VT success rate ---
+        # Use DB-level filtering on the JSON field instead of iterating
+        # all rows in Python — stays fast as the result count grows.
         if total_results > 0:
-            vt_available = 0
-            for r in Result.objects.all():
-                vt_status = r.vt_summary_json.get("enrichment_status", "")
-                if vt_status.startswith("success") or vt_status == "not_found":
-                    vt_available += 1
+            vt_available = Result.objects.filter(
+                vt_summary_json__enrichment_status__startswith="success"
+            ).count() + Result.objects.filter(
+                vt_summary_json__enrichment_status="not_found"
+            ).count()
             vt_success_rate = round(vt_available / total_results * 100, 1)
         else:
             vt_success_rate = 0.0
@@ -411,3 +413,5 @@ class APIKeyListCreateView(APIView):
             "message": f"API key for '{service}' {action} successfully.",
             "config": APIKeyConfigSerializer(config).data,
         }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+        

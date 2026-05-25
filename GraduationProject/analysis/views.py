@@ -198,8 +198,11 @@ class ReportDetailView(RetrieveAPIView):
     lookup_field = "id"
 
     def get_queryset(self):
+        from django.db.models import Count
         user = self.request.user
-        queryset = Result.objects.select_related("file", "cluster").all()
+        queryset = Result.objects.select_related("file", "cluster").annotate(
+            cluster_size=Count("cluster__results")
+        ).all()
 
         if user.role == "analyst":
             queryset = queryset.filter(file__uploaded_by=user)
@@ -232,6 +235,13 @@ class ReportExportView(APIView):
 
         from .services.report_export import export_as_json, export_as_pdf
 
+        # Reflect the request's Origin header back so the response works
+        # whether the frontend is on localhost:5173 or 127.0.0.1:5173.
+        # The corsheaders middleware already validates allowed origins for
+        # normal DRF responses; we mirror that behaviour here for the raw
+        # Django responses used for file downloads.
+        request_origin = request.headers.get("Origin", "")
+
         if export_format == "pdf":
             pdf_bytes = export_as_pdf(result)
             if pdf_bytes is None:
@@ -244,7 +254,7 @@ class ReportExportView(APIView):
             from django.http import HttpResponse as DjangoResponse
             response = DjangoResponse(pdf_bytes, content_type="application/pdf")
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
-            response["Access-Control-Allow-Origin"] = "http://localhost:5173"
+            response["Access-Control-Allow-Origin"] = request_origin
             response["Access-Control-Allow-Credentials"] = "true"
             response["Access-Control-Expose-Headers"] = "Content-Disposition"
             return response
@@ -255,7 +265,8 @@ class ReportExportView(APIView):
             from django.http import JsonResponse
             response = JsonResponse(json_data, json_dumps_params={"indent": 2})
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
-            response["Access-Control-Allow-Origin"] = "http://localhost:5173"
+            response["Access-Control-Allow-Origin"] = request_origin
             response["Access-Control-Allow-Credentials"] = "true"
             response["Access-Control-Expose-Headers"] = "Content-Disposition"
             return response
+            

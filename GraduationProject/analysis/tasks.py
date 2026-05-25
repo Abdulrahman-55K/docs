@@ -10,9 +10,9 @@ The main task `run_analysis` orchestrates the full pipeline:
   6. Generate result & report
 
 Each stage has graceful degradation:
-  - YARA fails → skip, mark "YARA unavailable"
-  - VT fails → skip, mark "VT unavailable"
-  - ML fails → fallback to "Needs Review"
+  - YARA fails -> skip, mark "YARA unavailable"
+  - VT fails -> skip, mark "VT unavailable"
+  - ML fails -> fallback to "Needs Review"
 
 This maps to the "Analysis Worker" in the data flow diagram.
 """
@@ -54,7 +54,7 @@ def run_analysis(self, file_id: str):
 
     try:
         # ---------------------------------------------------------------
-        # Stage 1: Extract metadata & XMP (Step 5 will implement)
+        # Stage 1: Extract metadata & XMP
         # ---------------------------------------------------------------
         features_data = _extract_metadata(file_record)
 
@@ -65,22 +65,60 @@ def run_analysis(self, file_id: str):
         )
 
         # ---------------------------------------------------------------
-        # Stage 2: YARA scan (Step 6 will implement)
+        # Stage 2: YARA scan
         # ---------------------------------------------------------------
         yara_results = _run_yara_scan(file_record)
 
         # ---------------------------------------------------------------
-        # Stage 3: VirusTotal hash enrichment (Step 6 will implement)
+        # Stage 3: VirusTotal hash enrichment
         # ---------------------------------------------------------------
         vt_data = _enrich_virustotal(file_record)
 
         # ---------------------------------------------------------------
-        # Stage 4: ML risk scoring (Step 7 will implement)
+        # Stage 4: ML risk scoring
         # ---------------------------------------------------------------
         ml_result = _score_ml(file_record, features_data, yara_results, vt_data)
 
         # ---------------------------------------------------------------
-        # Stage 5: Campaign clustering (Step 7 will implement)
+        # Service-failure check: override banner to needs_review if a
+        # major analysis service (YARA or ML model) actually failed.
+        #
+        # YARA "unavailable: no active rules" is NOT a failure — it just
+        # means no rules are configured yet.  An "error:" prefix means
+        # something went wrong at runtime.
+        #
+        # ML "ml_failed" is set only when a model WAS loaded but crashed
+        # during scoring.  Falling back because no model is configured is
+        # expected behaviour and keeps the normal clean/suspicious/malicious
+        # verdicts.
+        # ---------------------------------------------------------------
+        yara_status = yara_results.get("scan_status", "")
+        yara_errored = yara_status.startswith("error:")
+
+        ml_crashed = ml_result.get("ml_failed", False)
+
+        if yara_errored or ml_crashed:
+            reason = []
+            if yara_errored:
+                reason.append(f"YARA scan error ({yara_status})")
+            if ml_crashed:
+                reason.append("ML model scoring failed")
+            logger.warning(
+                "Overriding banner to needs_review for %s — %s",
+                file_id, "; ".join(reason),
+            )
+            ml_result["banner"] = "needs_review"
+            ml_result["label"] = "needs_review"
+            ml_result["top_features"] = [
+                {
+                    "feature": "service_failure",
+                    "detail": "Analysis incomplete — " + "; ".join(reason),
+                    "weight": "high",
+                }
+            ] + ml_result.get("top_features", [])
+
+        # ---------------------------------------------------------------
+        # Stage 5: Campaign clustering
         # ---------------------------------------------------------------
         cluster = _assign_cluster(file_record, features_data, ml_result)
 
@@ -142,8 +180,7 @@ def run_analysis(self, file_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Pipeline stage stubs — each returns sensible defaults for now.
-# Steps 5-7 will replace these with real implementations.
+# Pipeline stage functions
 # ---------------------------------------------------------------------------
 
 def _extract_metadata(file_record) -> dict:
@@ -215,3 +252,5 @@ def _assign_cluster(file_record, features: dict, ml_result: dict):
 
     from .services.clustering import assign_cluster
     return assign_cluster(file_record, features, ml_result)
+
+    

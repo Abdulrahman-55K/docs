@@ -307,6 +307,28 @@ LOGGING = {
             "handlers": ["console"],
             "level": "INFO",
         },
+
+    "celery": {
+        "handlers": ["console"],
+        "level": "CRITICAL",
+        "propagate": False,
+    },
+    "celery.app.trace": {
+        "handlers": [],
+        "level": "CRITICAL",
+        "propagate": False,
+    },
+    "kombu": {
+        "handlers": [],
+        "level": "CRITICAL",
+        "propagate": False,
+    },
+    "amqp": {
+        "handlers": [],
+        "level": "CRITICAL",
+        "propagate": False,
+    },
+
         "accounts": {
             "handlers": ["console", "file_security"],
             "level": "INFO",

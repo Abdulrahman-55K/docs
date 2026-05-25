@@ -1,15 +1,16 @@
+
 """
 ML risk scoring service.
 
 Integrates with the AI team's WeightedEnsemble model:
   - RandomForest (35%) + XGBoost (25%) + ExtraTrees (40%)
   - 26 features: structural + PDF indicators + XMP + temporal + file type
-  - Thresholds: Clean <0.25, Needs Review 0.25-0.35, Suspicious 0.35-0.5, Malicious >=0.65
+  - Thresholds: Clean <0.25, Suspicious 0.25-0.65, Malicious >=0.65
   - Accuracy: 89.45%, AUC: 0.9539
 
 Two modes:
-  1. ML model available → load ensemble, build feature vector, predict
-  2. No model yet → rule-based fallback scoring
+  1. ML model available -> load ensemble, build feature vector, predict
+  2. No model yet -> rule-based fallback scoring
 
 The AI team's model files:
   - malicious_doc_detector.pkl (ensemble dict with rf, xgb, et, weights, threshold)
@@ -60,8 +61,17 @@ def score_file(file_record, features: dict, yara_results: dict, vt_data: dict) -
             return result
         except Exception as e:
             logger.error("ML model scoring failed: %s — falling back to rules", e)
+            # Fallback: rule-based scoring — tag so tasks.py knows ML failed
+            result = _rule_based_scoring(file_record, features, yara_results, vt_data)
+            result["scoring_method"] = "rule_based"
+            result["ml_failed"] = True
+            logger.info(
+                "Rule-based scored %s: label=%s, score=%.3f",
+                file_record.id, result["label"], result["score"],
+            )
+            return result
 
-    # Fallback: rule-based scoring
+    # No active ML model — rule-based fallback (expected when model not yet configured)
     result = _rule_based_scoring(file_record, features, yara_results, vt_data)
     result["scoring_method"] = "rule_based"
     logger.info(
@@ -174,7 +184,7 @@ def _score_with_model(model_data: dict, file_record, features: dict, yara_result
         score = float(weights[0] * rf_prob + weights[1] * xgb_prob + weights[2] * et_prob)
 
         logger.info(
-            "Ensemble scores: RF=%.4f, XGB=%.4f, ET=%.4f → weighted=%.4f",
+            "Ensemble scores: RF=%.4f, XGB=%.4f, ET=%.4f -> weighted=%.4f",
             rf_prob, xgb_prob, et_prob, score,
         )
 
@@ -189,27 +199,42 @@ def _score_with_model(model_data: dict, file_record, features: dict, yara_result
     else:
         raise ValueError(f"Unknown model type: {model_data['type']}")
 
-    # Use AI team's thresholds
-    thresholds = metadata.get("thresholds", {})
+    # Blend VT and YARA signals into the ML score.
+    # ML is the primary signal; VT and YARA apply additive boosts only --
+    # they can push the score up but never pull it down.
+    raw_ml_score = score
+    score, vt_boost, yara_boost = _blend_with_vt_yara(score, yara_results, vt_data)
+
+    logger.info(
+        "Hybrid score for %s: ml=%.4f, vt_boost=%.4f, yara_boost=%.4f, final=%.4f",
+        file_record.id, raw_ml_score, vt_boost, yara_boost, score,
+    )
+
+    # Map the AI team's 4-band JSON thresholds to our 3-band system.
+    # We use "needs_review" (0.35) as the suspicious lower boundary because
+    # their label_map shows suspicious starts at thr-0.15 = 0.35, not at
+    # the "suspicious" key (0.50) which was the upper boundary in their system.
+    thresholds = (metadata or {}).get("thresholds", {})
     label, banner = _score_to_label_ml(
         score,
         clean_thr=float(thresholds.get("clean", 0.25)),
-        needs_review_thr=float(thresholds.get("needs_review", 0.35)),
-        suspicious_thr=float(thresholds.get("suspicious", 0.5)),
+        suspicious_thr=float(thresholds.get("needs_review", 0.35)),
         malicious_thr=float(thresholds.get("malicious", 0.65)),
     )
 
     # Get top contributing features
     top_features = _get_top_features_ensemble(artifact, df, feature_names, features)
 
-    # Build evidence from model
+    # Build evidence from model + VT/YARA boost evidence
     evidence = _build_ml_evidence(features, score, label)
+    boost_evidence = _build_boost_evidence(vt_boost, yara_boost, vt_data, yara_results)
 
     return {
         "label": label,
         "score": round(score, 4),
+        "raw_ml_score": round(raw_ml_score, 4),
         "banner": banner,
-        "top_features": top_features + evidence,
+        "top_features": top_features + boost_evidence + evidence,
     }
 
 
@@ -311,23 +336,110 @@ def _calculate_time_delta(creation_date: str, modification_date: str) -> float:
     return abs((modify_dt - create_dt).total_seconds())
 
 
-def _score_to_label_ml(score: float, clean_thr=0.25, needs_review_thr=0.35,
-                        suspicious_thr=0.5, malicious_thr=0.65) -> tuple[str, str]:
+def _blend_with_vt_yara(ml_score: float, yara_results: dict, vt_data: dict) -> tuple[float, float, float]:
+    """
+    Blend VT and YARA signals into the raw ML score.
+
+    ML is the primary signal and is never reduced — VT and YARA
+    can only push the score upward.  This ensures the ML model's
+    learned patterns remain dominant while confirmed external
+    signals (a known-bad hash, a matched malware rule) tighten
+    the final verdict.
+
+    Boost caps:
+      VT  -- up to +0.20 (scales with detection ratio)
+      YARA -- up to +0.15 (high-severity rules carry more weight)
+      Total blended score is capped at 1.0.
+
+    Returns:
+        (final_score, vt_boost, yara_boost)
+    """
+    vt_boost = 0.0
+    yara_boost = 0.0
+
+    # --- VT boost ---
+    vt_status = vt_data.get("enrichment_status", "")
+    vt_malicious = vt_data.get("malicious", 0)
+    vt_total = max(vt_data.get("total_engines", 1), 1)
+
+    if vt_status.startswith("success") and vt_malicious > 0:
+        # Scale boost by detection ratio, capped at 0.20
+        vt_ratio = vt_malicious / vt_total
+        vt_boost = round(min(vt_ratio * 0.20, 0.20), 4)
+
+    # --- YARA boost ---
+    yara_matches = yara_results.get("matches", [])
+    if yara_matches:
+        high_count = sum(
+            1 for m in yara_matches
+            if m.get("severity") in ("high", "critical")
+        )
+        med_count = sum(
+            1 for m in yara_matches
+            if m.get("severity") == "medium"
+        )
+        low_count = sum(
+            1 for m in yara_matches
+            if m.get("severity") == "low"
+        )
+        raw_yara = high_count * 0.08 + med_count * 0.04 + low_count * 0.02
+        yara_boost = round(min(raw_yara, 0.15), 4)
+
+    final_score = round(min(ml_score + vt_boost + yara_boost, 1.0), 4)
+    return final_score, vt_boost, yara_boost
+
+
+def _build_boost_evidence(vt_boost: float, yara_boost: float,
+                           vt_data: dict, yara_results: dict) -> list[dict]:
+    """
+    Build evidence entries that explain VT/YARA score contributions.
+    Only included when they actually added a boost.
+    """
+    evidence = []
+
+    if vt_boost > 0:
+        vt_malicious = vt_data.get("malicious", 0)
+        vt_total = vt_data.get("total_engines", 0)
+        evidence.append({
+            "feature": "vt_score_boost",
+            "detail": (
+                f"VirusTotal: {vt_malicious}/{vt_total} engines flagged — "
+                f"score boosted by +{vt_boost:.2f}"
+            ),
+            "weight": "high" if vt_malicious >= 10 else "medium",
+        })
+
+    if yara_boost > 0:
+        match_count = len(yara_results.get("matches", []))
+        evidence.append({
+            "feature": "yara_score_boost",
+            "detail": (
+                f"YARA: {match_count} rule(s) matched — "
+                f"score boosted by +{yara_boost:.2f}"
+            ),
+            "weight": "high" if yara_boost >= 0.08 else "medium",
+        })
+
+    return evidence
+
+
+def _score_to_label_ml(score: float, clean_thr=0.25,
+                        suspicious_thr=0.35, malicious_thr=0.65) -> tuple[str, str]:
     """
     Convert score to label using the AI team's thresholds.
 
-    Thresholds from model_metadata.json:
-      Clean:       [0.00, 0.25)
-      Needs Review: [0.25, 0.35)
-      Suspicious:  [0.35, 0.50)
-      Malicious:   [0.65, 1.00]
+    Thresholds:
+      Clean:      [0.00, 0.25)
+      Suspicious: [0.25, 0.65)
+      Malicious:  [0.65, 1.00]
+
+    Note: "needs_review" is NOT a score band — it is only set by the
+    pipeline (tasks.py) when a major service (YARA or ML model) fails.
     """
     if score >= malicious_thr:
         return "malicious", "malicious"
     elif score >= suspicious_thr:
         return "suspicious", "suspicious"
-    elif score >= needs_review_thr:
-        return "needs_review", "needs_review"
     else:
         return "clean", "clean"
 
@@ -553,3 +665,5 @@ def _score_to_label_fallback(score: float) -> tuple[str, str]:
         return "suspicious", "suspicious"
     else:
         return "malicious", "malicious"
+        
+
