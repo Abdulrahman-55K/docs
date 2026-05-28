@@ -54,8 +54,12 @@ def env_list(key: str, default: str = "") -> list[str]:
 # ---------------------------------------------------------------------------
 SECRET_KEY = env("SECRET_KEY", "django-insecure-CHANGE-ME-IN-PRODUCTION")
 DEBUG = env_bool("DEBUG", True)
-ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
-
+#ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'api.descg.store'
+    ]
 # ---------------------------------------------------------------------------
 # Installed apps
 # ---------------------------------------------------------------------------
@@ -82,6 +86,7 @@ INSTALLED_APPS = [
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     "corsheaders.middleware.CorsMiddleware",          # <-- must be high
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -120,7 +125,7 @@ if _db_engine == "django.db.backends.sqlite3":
     DATABASES = {
         "default": {
             "ENGINE": _db_engine,
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": BASE_DIR / "db_data/db.sqlite3",
         }
     }
 else:
@@ -178,10 +183,20 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ---------------------------------------------------------------------------
 # CORS  (React frontend → Django API)
 # ---------------------------------------------------------------------------
-CORS_ALLOWED_ORIGINS = env_list(
-    "CORS_ALLOWED_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173",
-)
+#CORS_ALLOWED_ORIGINS = env_list(
+#    "CORS_ALLOWED_ORIGINS",
+#    "http://localhost:5173,http://127.0.0.1:5173",
+#)
+CSRF_TRUSTED_ORIGINS = [
+    'https://api.descg.store',
+    "https://app.descg.store"
+]
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://app.descg.store",
+    'https://api.descg.store'
+]
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_EXPOSE_HEADERS = ["Content-Disposition"]

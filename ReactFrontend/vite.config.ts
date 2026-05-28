@@ -7,4 +7,13 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  server: {
+    host: true, // Crucial: Tells Vite to listen to the network tunnel
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      'swimming-irritate-rummage.ngrok-free.dev',
+      'app.descg.store'
+    ]
+  }
 });

@@ -10,7 +10,7 @@
  *   - Guest token — UUID identifying unauthenticated users across sessions
  */
 
-const API_BASE = "http://127.0.0.1:8000/api/v1";
+const API_BASE = "https://api.descg.store/api/v1";
 
 // ---------------------------------------------------------------------------
 // Token management
