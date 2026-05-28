@@ -186,6 +186,12 @@ CORS_ALLOW_CREDENTIALS = True
 
 CORS_EXPOSE_HEADERS = ["Content-Disposition"]
 
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-guest-token",
+]
+
+
 # ---------------------------------------------------------------------------
 # Django REST Framework
 # ---------------------------------------------------------------------------
@@ -223,13 +229,16 @@ SIMPLE_JWT = {
 # ---------------------------------------------------------------------------
 # Email (OTP delivery)
 # ---------------------------------------------------------------------------
-EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-EMAIL_HOST = env("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_BACKEND = env("EMAIL_BACKEND", "core.email_backend.ResendEmailBackend")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "MalDoc Detector <onboarding@resend.dev>")
+RESEND_API_KEY = env("RESEND_API_KEY", "")
+
+# SMTP settings kept as fallback (only used if EMAIL_BACKEND is overridden)
+EMAIL_HOST = env("EMAIL_HOST", "smtp.resend.com")
 EMAIL_PORT = env_int("EMAIL_PORT", 587)
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
-EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", "resend")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "MalDoc Detector <noreply@maldoc.local>")
 
 # ---------------------------------------------------------------------------
 # Celery (async analysis jobs)

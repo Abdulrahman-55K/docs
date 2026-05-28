@@ -7,6 +7,7 @@ import {
   Settings,
   Activity,
   LogOut,
+  LogIn,
 } from "lucide-react";
 
 export default function Navigation() {
@@ -35,7 +36,10 @@ export default function Navigation() {
     { path: "/admin/activity-log", label: "Activity Log", icon: Activity },
   ];
 
+  // Guests see the same nav links as analysts
   const links = role === "admin" ? adminLinks : analystLinks;
+
+  const isGuest = !user;
 
   return (
     <nav className="bg-white border-b border-slate-200 shadow-sm">
@@ -64,18 +68,35 @@ export default function Navigation() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-slate-700">
-                {user?.email}
-              </p>
-              <p className="text-xs text-slate-500 capitalize">{role}</p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1 text-sm text-slate-500 hover:text-red-600 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            {isGuest ? (
+              // Guest: show a login prompt
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500">Guest</span>
+                <Link
+                  to="/login"
+                  className="flex items-center gap-1.5 text-sm font-medium text-teal-600 hover:text-teal-700 transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  Login
+                </Link>
+              </div>
+            ) : (
+              // Authenticated user: show email + logout
+              <>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-slate-700">
+                    {user?.email}
+                  </p>
+                  <p className="text-xs text-slate-500 capitalize">{role}</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-1 text-sm text-slate-500 hover:text-red-600 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

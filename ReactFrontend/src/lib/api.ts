@@ -7,6 +7,7 @@
  *   - Auto-attach Authorization header
  *   - Token refresh on 401
  *   - Typed request helpers (get, post, patch, delete, upload)
+ *   - Guest token — UUID identifying unauthenticated users across sessions
  */
 
 const API_BASE = "http://127.0.0.1:8000/api/v1";
@@ -34,6 +35,27 @@ export function clearTokens() {
 }
 
 // ---------------------------------------------------------------------------
+// Guest token
+// Identifies unauthenticated users so every upload is traceable in logs
+// and guests can retrieve their own report history without an account.
+// Generated once on first visit, stored in localStorage.
+// ---------------------------------------------------------------------------
+
+export function getGuestToken(): string {
+  const key = "guest_token";
+  let token = localStorage.getItem(key);
+  if (!token) {
+    token = crypto.randomUUID();
+    localStorage.setItem(key, token);
+  }
+  return token;
+}
+
+export function clearGuestToken(): void {
+  localStorage.removeItem("guest_token");
+}
+
+// ---------------------------------------------------------------------------
 // Core fetch wrapper
 // ---------------------------------------------------------------------------
 
@@ -47,11 +69,14 @@ async function apiFetch(
     ...(options.headers as Record<string, string> || {}),
   };
 
-  // Auto-attach JWT token (skip for FormData — browser sets Content-Type)
+  // Auto-attach JWT token
   const token = getAccessToken();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
+
+  // Always include guest token so backend can trace unauthenticated requests
+  headers["X-Guest-Token"] = getGuestToken();
 
   // Set Content-Type for JSON requests (not for FormData uploads)
   if (!(options.body instanceof FormData)) {
@@ -64,11 +89,9 @@ async function apiFetch(
   if (response.status === 401 && getRefreshToken()) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
-      // Retry the original request with new token
       headers["Authorization"] = `Bearer ${getAccessToken()}`;
       return fetch(url, { ...options, headers });
     } else {
-      // Refresh failed — clear tokens and redirect to login
       clearTokens();
       window.location.href = "/login";
     }
@@ -112,13 +135,11 @@ export async function api<T = any>(
     const status = response.status;
 
     if (response.ok) {
-      // Handle empty responses (204 No Content)
       const text = await response.text();
       const data = text ? JSON.parse(text) : null;
       return { data: data as T, error: null, status };
     }
 
-    // Parse error response
     const errorData = await response.json().catch(() => ({}));
     const errorMessage =
       errorData.detail ||
@@ -158,6 +179,5 @@ export async function apiUpload<T = any>(endpoint: string, formData: FormData) {
   return api<T>(endpoint, {
     method: "POST",
     body: formData,
-    // Don't set Content-Type — browser sets it with boundary for FormData
   });
 }

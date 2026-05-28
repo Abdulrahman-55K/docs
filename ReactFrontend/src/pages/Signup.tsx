@@ -52,8 +52,8 @@ export default function Signup() {
       if (verifyError) {
         setError(verifyError);
       } else {
-        setSuccess("Email verified! Redirecting to login...");
-        setTimeout(() => navigate("/login"), 2000);
+        setSuccess("Email verified! Taking you to the dashboard...");
+        setTimeout(() => navigate("/dashboard"), 1500);
       }
     } catch (err: any) {
       setError("Verification failed");

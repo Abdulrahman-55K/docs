@@ -16,14 +16,16 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          {/* Public auth routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
 
+          {/* Analyst routes — guests allowed */}
           <Route
             path="/dashboard"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowGuest>
                 <AnalystDashboard />
               </ProtectedRoute>
             }
@@ -31,7 +33,7 @@ function App() {
           <Route
             path="/reports"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowGuest>
                 <Reports />
               </ProtectedRoute>
             }
@@ -39,16 +41,17 @@ function App() {
           <Route
             path="/reports/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowGuest>
                 <ReportDetail />
               </ProtectedRoute>
             }
           />
 
+          {/* Admin routes — authenticated + admin role only */}
           <Route
             path="/admin/dashboard"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin>
                 <AdminDashboard />
               </ProtectedRoute>
             }
@@ -56,7 +59,7 @@ function App() {
           <Route
             path="/admin/settings"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin>
                 <AdminSettings />
               </ProtectedRoute>
             }
@@ -64,7 +67,7 @@ function App() {
           <Route
             path="/admin/activity-log"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requireAdmin>
                 <AdminActivityLog />
               </ProtectedRoute>
             }

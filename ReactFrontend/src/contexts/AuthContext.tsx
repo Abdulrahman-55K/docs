@@ -94,14 +94,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const verifyOTP = async (email: string, code: string, purpose: string) => {
-    const { data, error } = await apiPost("/auth/verify-otp/", {
-      email,
-      code,
-      purpose,
-    });
+    const { data, error } = await apiPost<{
+      verified: boolean;
+      tokens?: { access: string; refresh: string };
+      user?: User;
+    }>("/auth/verify-otp/", { email, code, purpose });
+
     if (error) return { error };
+
+    // Signup verification returns tokens — log the user in automatically
+    if (data?.tokens && data?.user) {
+      setTokens(data.tokens.access, data.tokens.refresh);
+      setUser(data.user);
+      setRole(data.user.role);
+    }
+
     return {};
   };
+  
 
   const resendOTP = async (email: string, purpose: string) => {
     const { data, error } = await apiPost("/auth/resend-otp/", {

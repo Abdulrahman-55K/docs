@@ -157,10 +157,37 @@ class VerifyOTPView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # If signup verification, mark user as verified
+       # If signup verification, mark user as verified and return tokens
+        # so the frontend can log the user in immediately without a second step.
         if purpose == OTP.Purpose.SIGNUP:
             user.is_verified = True
             user.save(update_fields=["is_verified"])
+
+            tokens = _get_tokens_for_user(user)
+
+            log_audit(
+                request=request,
+                user=user,
+                category="auth",
+                action="OTP verified (signup) — auto login issued",
+                details={"email": email},
+            )
+
+            return Response(
+                {
+                    "message": "Email verified. Welcome!",
+                    "verified": True,
+                    "tokens": tokens,
+                    "user": {
+                        "id": str(user.id),
+                        "email": user.email,
+                        "role": user.role,
+                        "is_verified": user.is_verified,
+                        "created_at": user.created_at.isoformat(),
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
 
         log_audit(
             request=request,
@@ -174,7 +201,7 @@ class VerifyOTPView(APIView):
             {"message": "Verification successful.", "verified": True},
             status=status.HTTP_200_OK,
         )
-
+        
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/auth/login/

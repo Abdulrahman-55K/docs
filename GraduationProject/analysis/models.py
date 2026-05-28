@@ -19,6 +19,9 @@ class File(models.Model):
     Represents an uploaded document in quarantine.
 
     ER: FILES(id, sha256, mime, status, created_at)
+
+    uploaded_by is nullable to support guest uploads. When null,
+    guest_token identifies the uploader (a UUID from the browser).
     """
 
     class Status(models.TextChoices):
@@ -42,8 +45,18 @@ class File(models.Model):
     )
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="files",
+        help_text="Authenticated user who uploaded. Null for guest uploads.",
+    )
+    guest_token = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Browser-generated UUID for guest (unauthenticated) uploaders.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -53,6 +66,15 @@ class File(models.Model):
 
     def __str__(self):
         return f"{self.original_name} ({self.status})"
+
+    @property
+    def uploader_label(self) -> str:
+        """Human-readable uploader identifier for logs and UI."""
+        if self.uploaded_by:
+            return self.uploaded_by.email
+        if self.guest_token:
+            return f"Guest [{self.guest_token[:8]}]"
+        return "Unknown"
 
 
 class Feature(models.Model):
@@ -103,7 +125,7 @@ class YaraHit(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.rule_name} → {self.file.original_name}"
+        return f"{self.rule_name} -> {self.file.original_name}"
 
 
 class Cluster(models.Model):
@@ -180,4 +202,6 @@ class Result(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.file.original_name} → {self.banner}"
+        return f"{self.file.original_name} -> {self.banner}"
+
+        

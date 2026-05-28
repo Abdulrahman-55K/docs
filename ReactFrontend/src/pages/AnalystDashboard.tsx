@@ -1,8 +1,9 @@
 import React, { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { Upload, FileText, CheckCircle, AlertCircle, Clock, Shield } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { Upload, FileText, CheckCircle, AlertCircle, Clock, Shield, UserPlus } from "lucide-react";
 import Navigation from "../components/Navigation";
 import { apiUpload } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function AnalystDashboard() {
   const [file, setFile] = useState<File | null>(null);
@@ -11,6 +12,9 @@ export default function AnalystDashboard() {
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const isGuest = !user;
 
   const acceptedFormats = [
     "application/pdf",
@@ -91,6 +95,24 @@ export default function AnalystDashboard() {
       <Navigation />
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+
+        {/* Guest banner — shown only to unauthenticated users */}
+        {isGuest && (
+          <div className="mb-6 p-4 bg-teal-50 border border-teal-200 rounded-xl flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <UserPlus className="w-5 h-5 text-teal-600 flex-shrink-0" />
+              <p className="text-sm text-teal-800">
+                You're using MalDoc Detector as a guest. Your reports are saved
+                to this browser session.{" "}
+                <Link to="/signup" className="font-medium underline hover:no-underline">
+                  Create a free account
+                </Link>{" "}
+                to keep your history and access reports from any device.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
             Upload Document
@@ -168,9 +190,7 @@ export default function AnalystDashboard() {
                   {result.report_id && (
                     <button
                       type="button"
-                      onClick={() =>
-                        navigate(`/reports/${result.report_id}`)
-                      }
+                      onClick={() => navigate(`/reports/${result.report_id}`)}
                       className="mt-2 text-sm underline hover:no-underline"
                     >
                       View full report →
