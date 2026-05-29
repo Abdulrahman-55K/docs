@@ -1,8 +1,13 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-# Install system utilities needed for building packages
+# Install system utilities needed for building packages and file validation
+#   gcc           — compiles native extensions (yara-python, etc.)
+#   build-essential — full build toolchain (needed by some wheels)
+#   libmagic1     — required by python-magic for MIME/magic-byte detection
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    build-essential \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a dedicated, low-privileged security user group
@@ -10,7 +15,7 @@ RUN groupadd -r djangogroup && useradd -r -g djangogroup djangouser
 
 WORKDIR /app
 
-# Install dependencies (Make sure 'gunicorn' and 'whitenoise' are in your requirements.txt)
+# Install dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -21,7 +26,7 @@ COPY . /app/
 RUN SECRET_KEY=dummy-build-key-only python manage.py collectstatic --noinput
 
 # =========================================================================
-# CRITICAL FIX: Pre-create and force permission ownership on ALL paths 
+# CRITICAL FIX: Pre-create and force permission ownership on ALL paths
 # that will be used by your Docker-Compose volumes.
 # =========================================================================
 RUN mkdir -p /app/media/quarantine /app/logs /app/media/models /app/media/yara_rules /app/db_data \
@@ -33,5 +38,6 @@ USER djangouser
 
 EXPOSE 8000
 
-# CHANGED: Standard Output execution to bypass log capturing blocks
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--access-logfile", "-", "--error-logfile", "-", "core.wsgi:application"]
+# Standard output execution to bypass log capturing blocks
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--access-logfile", "-", "--error-logfile", "-", "--timeout", "120", "--workers", "2", "core.wsgi:application"]
+

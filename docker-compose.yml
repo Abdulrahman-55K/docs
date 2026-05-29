@@ -1,4 +1,4 @@
-version: '3.8'
+#version: '3.8'
 
 services:
   # 1. PRODUCTION REACT FRONTEND
@@ -7,13 +7,13 @@ services:
       context: ./ReactFrontend
       dockerfile: Dockerfile
     container_name: mdd_production_frontend
-    
+
     # Explicitly enforce the low-privilege user at the orchestrator layer
     user: "nginx"
-    
+
     ports:
-      # Map your host port 3000 -> container's new unprivileged port 8080
-      - "3000:8080"
+      # Map your host port 3200 -> container's unprivileged port 8080
+      - "3200:8080"
     networks:
       - mdd_prod_network
     restart: always
@@ -24,39 +24,37 @@ services:
       context: ./GraduationProject
       dockerfile: Dockerfile
     container_name: mdd_production_backend
-    
+
     # FORCE COMPOSE AND EXEC COMMANDS TO ALWAYS RUN AS YOUR LOW-PRIVILEGE DOCKERFILE USER
     user: "djangouser"
-    
+
     volumes:
       # A. HARDENED QUARANTINE STORAGE (Execution Blocked)
-      # - noexec: Blocks binary execution inside this storage pool
-      # - nosuid: Prevents malicious privilege escalation attempts
-      # - nodev: Disables character/block special devices mapping
       - permanent_quarantine_storage:/app/media/quarantine:noexec,nosuid,nodev
-      
+
       # B. PERMANENT SECURITY & SERVER LOGS
-      # Stores execution and audit trail history permanently across container rebuilds
       - backend_logs_storage:/app/logs
-      
+
       # C. PERMANENT MACHINE LEARNING MODEL WEIGHTS
-      # Prevents heavy trained AI/ML files from getting accidentally deleted
       - backend_models_storage:/app/media/models
-      
+
       # D. PERMANENT YARA THREAT RULES
-      # Allows you to dynamically add/edit malware signature rules without losing them
       - backend_yara_storage:/app/media/yara_rules
 
-      - backend_db_storage:/app/db_data  # ◄── ADD THIS LINE HERE
-      
+      # E. PERMANENT DATABASE (SQLite) — keeps accounts/reports across rebuilds
+      - backend_db_storage:/app/db_data
+
     environment:
       - DEBUG=0
       - SECRET_KEY=your-super-secret-production-key-here
       - QUARANTINE_ROOT=/app/media/quarantine
+      # Force synchronous analysis: dead port -> .delay() fails fast -> sync fallback runs
+      - CELERY_BROKER_URL=redis://127.0.0.1:6399/0
+      - CELERY_RESULT_BACKEND=redis://127.0.0.1:6399/0
     ports:
       - "8000:8000"
     security_opt:
-      - no-new-privileges:true # Blocks malware from ever escalating privileges back to root
+      - no-new-privileges:true
     networks:
       - mdd_prod_network
     restart: always
@@ -65,7 +63,8 @@ networks:
   mdd_prod_network:
     driver: bridge
 
-# GLOBAL VOLUMES DEFINITION: Allocates isolated permanent spaces inside the Linux WSL2 subsystem
+
+# GLOBAL VOLUMES DEFINITION
 volumes:
   permanent_quarantine_storage:
   backend_logs_storage:

@@ -3,5 +3,6 @@ ingress:
   - hostname: api.descg.store
     service: http://localhost:8000
   - hostname: app.descg.store
-    service: http://localhost:3000
+    service: http://localhost:3200
   - service: http_status:404
+  

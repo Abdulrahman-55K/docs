@@ -53,7 +53,7 @@ def env_list(key: str, default: str = "") -> list[str]:
 # Core
 # ---------------------------------------------------------------------------
 SECRET_KEY = env("SECRET_KEY", "django-insecure-CHANGE-ME-IN-PRODUCTION")
-DEBUG = env_bool("DEBUG", True)
+DEBUG = env_bool("DEBUG", False)
 #ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
 ALLOWED_HOSTS = [
     'localhost',

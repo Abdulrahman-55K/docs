@@ -1,51 +1,51 @@
 # ============================================================
 # Malicious Document Detector — Python Dependencies
+# Pinned to match the training environment so the ML model
+# (saved with these exact versions) loads correctly in Docker.
 # Install:  pip install -r requirements.txt
 # ============================================================
 
 # --- Django core ---
-Django>=5.1,<5.2
-djangorestframework>=3.15,<4.0
-django-cors-headers>=4.4,<5.0
-djangorestframework-simplejwt>=5.3,<6.0
+Django==6.0.4
+djangorestframework==3.17.1
+django-cors-headers==4.9.0
+djangorestframework-simplejwt==5.5.1
 
 # --- Async task queue ---
-celery>=5.4,<6.0
-redis>=5.0,<6.0
+celery==5.6.3
+redis==7.4.0
 
-# --- File validation ---
+# --- File validation (Linux: needs libmagic1 system lib in Dockerfile) ---
 python-magic>=0.4.27,<1.0
 
-# --- Document parsing (Steps 5+) ---
-PyPDF2>=3.0,<4.0
-python-docx>=1.1,<2.0
-openpyxl>=3.1,<4.0
-python-pptx>=0.6,<1.0
-lxml>=5.0,<6.0
+# --- Document parsing ---
+PyPDF2==3.0.1
+python-docx==1.2.0
+openpyxl==3.1.5
+python-pptx==1.0.2
+lxml==6.1.0
 
-# --- XMP metadata extraction ---
-# (lxml covers XMP parsing from PDF/OOXML)
+# --- YARA scanning ---
+yara-python==4.5.4
 
-# --- YARA scanning (Step 6) ---
-yara-python>=4.5,<5.0
+# --- VirusTotal API ---
+requests==2.33.1
 
-# --- VirusTotal API (Step 6) ---
-requests>=2.31,<3.0
+# --- ML model loading (MUST match the versions the model was trained with) ---
+scikit-learn==1.8.0
+joblib==1.5.3
+xgboost==3.2.0
+numpy==2.4.4
+pandas==3.0.3
+scipy==1.17.1
 
-# --- ML model loading (Step 7) ---
-scikit-learn>=1.5,<2.0
-joblib>=1.4,<2.0
-xgboost>=2.0,<3.0
+# --- Email (OTP via Resend) ---
+resend==2.30.1
 
-# --- Report export (Step 8) ---
-reportlab>=4.1,<5.0
+# --- Report export ---
+reportlab==4.4.10
+pillow==12.2.0
 
-# --- Dev / Testing ---
-pytest>=8.0,<9.0
-pytest-django>=4.8,<5.0
-
-# --- WSGI HTTP Server ---
+# --- WSGI HTTP Server + static files ---
 gunicorn==22.0.0
-
-# --- For privileged page formating ---
-whitenoise==6.5.0
+whitenoise==6.12.0
