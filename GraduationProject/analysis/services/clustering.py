@@ -153,15 +153,16 @@ def _find_matching_cluster(xmp_ids: list[str]):
         if matching_features and matching_features.file.result.cluster:
             return matching_features.file.result.cluster
 
-        # Check image XMP IDs (JSON array contains)
-        matching_features = Feature.objects.filter(
-            data_json__xmp__image_xmp_ids__contains=[{"value": xmp_id}],
-        ).exclude(
+       # Check image XMP IDs — SQLite doesn't support __contains on JSON
+        # arrays, so iterate clustered features and match in Python.
+        candidates = Feature.objects.exclude(
             file__result__cluster__isnull=True,
-        ).select_related("file__result__cluster").first()
-
-        if matching_features and matching_features.file.result.cluster:
-            return matching_features.file.result.cluster
+        ).select_related("file__result__cluster")
+        for feat in candidates:
+            image_ids = ((feat.data_json or {}).get("xmp") or {}).get("image_xmp_ids") or []
+            for entry in image_ids:
+                if isinstance(entry, dict) and entry.get("value") == xmp_id:
+                    return feat.file.result.cluster
 
     return None
 
