@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doc Scanner - Malicious Document Detector</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="bg-animation">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav" id="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <img src="doc scanner LOGO.jpeg" alt="Doc Scanner" class="logo-icon">
+                <span class="logo-text">Doc Scanner</span>
+            </div>
+            <div class="nav-actions">
+                <a href="https://app.descg.store" class="btn-primary">Get Started</a>
+            </div>
+            <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+        <div class="mobile-menu" id="mobileMenu">
+            <div class="mobile-nav-actions">
+                <a href="https://app.descg.store" class="btn-primary">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge animate-fade-in-up">
+                <span class="badge-dot"></span>
+                <span>Advanced malware detection technology</span>
+            </div>
+            <h1 class="hero-title animate-fade-in-up delay-1">
+                Detect Malicious<br>
+                <span class="gradient-text">Documents Instantly</span>
+            </h1>
+            <p class="hero-description animate-fade-in-up delay-2">
+                Protect your organization with AI-powered threat detection using advanced XMP and ML algorithms. Upload Office or PDF documents for comprehensive malicious content analysis.
+            </p>
+            <div class="hero-cta animate-fade-in-up delay-3">
+                <a href="https://app.descg.store" class="btn-primary-large">
+                    Get Started
+                    <svg class="btn-arrow" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </a>
+            </div>
+        </div>
+        <div class="hero-visual animate-fade-in-up delay-2">
+            <div class="features-grid-simple">
+                <div class="feature-card-simple">
+                    <div class="feature-icon-circle">
+                        <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="5" y="11" width="14" height="10" rx="2" ry="2"></rect>
+                            <path d="M12 15v2"></path>
+                            <path d="M8 11V7a4 4 0 0 1 8 0v4"></path>
+                        </svg>
+                    </div>
+                    <h3 class="feature-card-title">Secure web platform</h3>
+                    <p class="feature-card-desc">Upload Office/PDF files for analysis with strict validation</p>
+                </div>
+                <div class="feature-card-simple">
+                    <div class="feature-icon-circle">
+                        <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none"
+                             stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                            <circle cx="8" cy="12" r="2"></circle>
+                            <path d="M13 10h5"></path>
+                            <path d="M13 14h4"></path>
+                        </svg>
+                    </div>
+                    <h3 class="feature-card-title">Extract XMP IDs</h3>
+                    <p class="feature-card-desc">
+                        Identify reused metadata linked to malicious campaigns
+                    </p>
+                </div>
+                <div class="feature-card-simple">
+                    <div class="feature-icon-circle">
+                        <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none"
+                             stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="7"></circle>
+                            <path d="M21 21l-4.35-4.35"></path>
+                        </svg>
+                    </div>
+                    <h3 class="feature-card-title">YARA rule matching</h3>
+                    <p class="feature-card-desc">
+                        Detect known malicious patterns in metadata &amp; structure
+                    </p>
+                </div>
+                <div class="feature-card-simple">
+                    <div class="feature-icon-circle">
+                        <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none"
+                             stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 19V5"></path>
+                            <path d="M4 19h16"></path>
+                    
+                            <path d="M7 15l3-3 3 2 4-5"></path>
+                    
+                            <circle cx="7" cy="15" r="1"></circle>
+                            <circle cx="10" cy="12" r="1"></circle>
+                            <circle cx="13" cy="14" r="1"></circle>
+                            <circle cx="17" cy="9" r="1"></circle>
+                        </svg>
+                    </div>
+                    <h3 class="feature-card-title">Train ML classifier</h3>
+                    <p class="feature-card-desc">
+                        Generalize to unseen and obfuscated samples
+                    </p>
+                </div>
+                <div class="feature-card-simple">
+                    <div class="feature-icon-circle">
+                        <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="4" width="5" height="5" rx="1"></rect>
+                            <rect x="15" y="4" width="5" height="5" rx="1"></rect>
+                            <rect x="4" y="15" width="5" height="5" rx="1"></rect>
+                            <path d="M9 6.5h6"></path>
+                            <path d="M6.5 9v6"></path>
+                            <path d="M9 17.5l6-11"></path>
+                        </svg>
+                    </div>
+                    <h3 class="feature-card-title">Campaign clustering</h3>
+                    <p class="feature-card-desc">Group documents sharing XMP IDs to reveal campaigns</p>
+                </div>
+                <div class="feature-card-simple">
+                    <div class="feature-icon-circle">
+                        <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                            <path d="M9 13l2 2 4-4"></path>
+                        </svg>
+                    </div>
+                    <h3 class="feature-card-title">Explainable reports</h3>
+                    <p class="feature-card-desc">Show score, label, and the evidence behind each verdict</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-bottom">
+                <p>&copy; 2024 Doc Scanner. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

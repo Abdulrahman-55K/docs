@@ -14,6 +14,7 @@ services:
     ports:
       # Map your host port 3200 -> container's unprivileged port 8080
       - "3200:8080"
+      - "3201:8081" # port for landing page
     networks:
       - mdd_prod_network
     restart: always

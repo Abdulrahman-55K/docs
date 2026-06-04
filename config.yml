@@ -1,8 +1,10 @@
 tunnel: graduation-project
 ingress:
+  - hostname: descg.store
+    service: http://localhost:3200
   - hostname: api.descg.store
     service: http://localhost:8000
   - hostname: app.descg.store
-    service: http://localhost:3200
+    service: http://localhost:3201
   - service: http_status:404
   
