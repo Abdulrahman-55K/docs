@@ -1,5 +1,3 @@
-#version: '3.8'
-
 services:
   # 1. PRODUCTION REACT FRONTEND
   frontend:
@@ -15,6 +13,11 @@ services:
       # Map your host port 3200 -> container's unprivileged port 8080
       - "3200:8080"
       - "3201:8081" # port for landing page
+    
+    volumes:
+      # UPDATED: Mounts Nginx logs folder directly to your Windows C:\ drive folder
+      - C:\DockerLogs\frontend:/var/log/nginx
+      
     networks:
       - mdd_prod_network
     restart: always
@@ -33,8 +36,8 @@ services:
       # A. HARDENED QUARANTINE STORAGE (Execution Blocked)
       - permanent_quarantine_storage:/app/media/quarantine:noexec,nosuid,nodev
 
-      # B. PERMANENT SECURITY & SERVER LOGS
-      - backend_logs_storage:/app/logs
+      # B. UPDATED: Maps internal Gunicorn/Django logs directly to your Windows host folder
+      - C:\DockerLogs\backend:/app/logs
 
       # C. PERMANENT MACHINE LEARNING MODEL WEIGHTS
       - backend_models_storage:/app/media/models
@@ -64,11 +67,10 @@ networks:
   mdd_prod_network:
     driver: bridge
 
-
 # GLOBAL VOLUMES DEFINITION
 volumes:
   permanent_quarantine_storage:
-  backend_logs_storage:
+  # Notice: backend_logs_storage is removed from here since it is now a direct host path bind mount!
   backend_models_storage:
   backend_yara_storage:
   backend_db_storage:

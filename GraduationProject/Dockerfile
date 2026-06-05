@@ -38,6 +38,5 @@ USER djangouser
 
 EXPOSE 8000
 
-# Standard output execution to bypass log capturing blocks
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--access-logfile", "-", "--error-logfile", "-", "--timeout", "120", "--workers", "2", "core.wsgi:application"]
-
+# Explicitly invoke bash to handle the process substitution syntax correctly
+CMD ["/bin/bash", "-c", "gunicorn --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --timeout 120 --workers 2 core.wsgi:application 1> >(tee -a /app/logs/gunicorn_access.log) 2> >(tee -a /app/logs/gunicorn_error.log >&2)"]
