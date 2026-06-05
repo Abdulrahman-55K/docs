@@ -357,16 +357,23 @@ def _blend_with_vt_yara(ml_score: float, yara_results: dict, vt_data: dict) -> t
     vt_boost = 0.0
     yara_boost = 0.0
 
-    # --- VT boost ---
+   # --- VT boost ---
     vt_status = vt_data.get("enrichment_status", "")
     vt_malicious = vt_data.get("malicious", 0)
     vt_total = max(vt_data.get("total_engines", 1), 1)
 
     if vt_status.startswith("success") and vt_malicious > 0:
-        # Scale boost by detection ratio, capped at 0.20
-        vt_ratio = vt_malicious / vt_total
-        vt_boost = round(min(vt_ratio * 0.20, 0.20), 4)
-
+        # Stepped boost: one engine flagging is weak, ten+ is near-certainty.
+        # A linear ratio undervalues strong consensus (26/76 -> only +0.07).
+        if vt_malicious >= 10:
+            vt_boost = 0.20
+        elif vt_malicious >= 5:
+            vt_boost = 0.15
+        elif vt_malicious >= 2:
+            vt_boost = 0.08
+        else:
+            vt_boost = 0.03
+            
     # --- YARA boost ---
     yara_matches = yara_results.get("matches", [])
     if yara_matches:
