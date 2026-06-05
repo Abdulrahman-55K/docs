@@ -9,6 +9,19 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
+
+# =========================================================================
+# PROXY & REAL CLIENT IP CONFIGURATION [to fix ip in logs of docker]
+# =========================================================================
+
+# 1. Trust standard proxy forwarding headers
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
+# 2. Securely determine if the connection is HTTPS via the edge proxy wrapper
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -85,6 +98,7 @@ INSTALLED_APPS = [
 # Middleware
 # ---------------------------------------------------------------------------
 MIDDLEWARE = [
+    'core.middleware.RealClientIPMiddleware',
     "django.middleware.security.SecurityMiddleware",
     'whitenoise.middleware.WhiteNoiseMiddleware',
     "corsheaders.middleware.CorsMiddleware",          # <-- must be high

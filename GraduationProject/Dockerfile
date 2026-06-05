@@ -39,4 +39,5 @@ USER djangouser
 EXPOSE 8000
 
 # Explicitly invoke bash to handle the process substitution syntax correctly
-CMD ["/bin/bash", "-c", "gunicorn --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --timeout 120 --workers 2 core.wsgi:application 1> >(tee -a /app/logs/gunicorn_access.log) 2> >(tee -a /app/logs/gunicorn_error.log >&2)"]
+# UPDATED: Added explicit --access-logformat string to parse the incoming proxy real IP header
+CMD ["/bin/bash", "-c", "gunicorn --bind 0.0.0.0:8000 --access-logfile - --error-logfile - --timeout 120 --workers 2 --access-logformat '%({X-Forwarded-For}i)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\"' core.wsgi:application 1> >(tee -a /app/logs/gunicorn_access.log) 2> >(tee -a /app/logs/gunicorn_error.log >&2)"]
