@@ -10,8 +10,7 @@
  *   - Guest token — UUID identifying unauthenticated users across sessions
  */
 
-const API_BASE = "https://api.descg.store/api/v1";
-
+export const API_BASE = "https://api.descg.store/api/v1";
 // ---------------------------------------------------------------------------
 // Token management
 // ---------------------------------------------------------------------------

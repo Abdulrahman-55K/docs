@@ -21,10 +21,33 @@ from pathlib import Path
 
 from rest_framework import status
 from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.negotiation import BaseContentNegotiation
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+
+class IgnoreClientContentNegotiation(BaseContentNegotiation):
+    """
+    Bypass DRF's format-based renderer filtering for the export endpoint.
+
+    The export view returns raw HttpResponse / DjangoResponse objects
+    directly (PDF bytes or JSON), so renderer matching is irrelevant —
+    but DRF's default negotiator inspects ?format=pdf, looks for a
+    renderer whose `.format` attribute equals "pdf", finds none, and
+    raises NotFound (404) before the view body ever runs.
+
+    This negotiator always returns the first available renderer and
+    skips format filtering entirely. The view's own logic then handles
+    PDF vs JSON via request.query_params.
+    """
+    def select_parser(self, request, parsers):
+        return parsers[0] if parsers else None
+
+    def select_renderer(self, request, renderers, format_suffix=None):
+        return (renderers[0], renderers[0].media_type)
+
 
 from accounts.permissions import IsAnalystOrAdmin
 from admin_panel.utils import log_audit
@@ -289,6 +312,7 @@ class ReportExportView(APIView):
     """Export a report as PDF or JSON download."""
 
     permission_classes = [AllowAny]
+    content_negotiation_class = IgnoreClientContentNegotiation
 
     def get(self, request, id):
         logger.info("Export requested: id=%s", id)

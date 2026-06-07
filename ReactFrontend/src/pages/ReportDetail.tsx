@@ -5,7 +5,7 @@ import {
   CheckCircle, AlertTriangle, TrendingUp, Zap,
 } from "lucide-react";
 import Navigation from "../components/Navigation";
-import { apiGet } from "../lib/api";
+import { apiGet, API_BASE, getAccessToken } from "../lib/api";
 
 interface ReportData {
   id: string;
@@ -50,26 +50,36 @@ export default function ReportDetail() {
     fetchReport();
   }, [id]);
 
-  const handleExport = (format: string) => {
-    const token = localStorage.getItem("access_token");
+  const handleExport = async (format: string) => {
+    const token = getAccessToken();
     if (!token) return;
 
-    fetch(`http://127.0.0.1:8000/api/v1/analysis/reports/${id}/export/?format=${format}`, {
-      headers: { "Authorization": `Bearer ${token}` },
-    })
-      .then(res => res.blob())
-      .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `report_${report?.file.sha256?.slice(0, 12)}.${format}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      })
-      .catch(err => console.error("Export error:", err));
+    try {
+      const res = await fetch(
+        `${API_BASE}/analysis/reports/${id}/export/?format=${format}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Export failed:", res.status, errText);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `report_${report?.file.sha256?.slice(0, 12)}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export error:", err);
+    }
   };
+  
 
   const getBannerStyle = (banner: string) => {
     switch (banner) {
